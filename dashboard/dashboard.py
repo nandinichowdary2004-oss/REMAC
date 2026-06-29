@@ -199,15 +199,6 @@ def trigger_rerun():
         st.experimental_rerun()
 
 # ============================================================
-# AUTO REFRESH
-# ============================================================
-
-st_autorefresh(
-    interval=5000,
-    key="dashboard_refresh"
-)
-
-# ============================================================
 # PAGE CONFIGURATION
 # ============================================================
 
@@ -216,6 +207,50 @@ st.set_page_config(
     page_icon="📡",
     layout="wide",
     initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# LOGIN PAGE
+# ============================================================
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+if not st.session_state.logged_in:
+    col1, col2, col3 = st.columns([1, 1.5, 1])
+    with col2:
+        st.markdown("<div style='height: 80px;'></div>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style="background-color: #1e1e2f; padding: 30px; border-radius: 15px; border: 1px solid #3a3a5c; box-shadow: 0px 4px 15px rgba(0,0,0,0.5);">
+            <h2 style="text-align: center; color: #4e8cff; margin-bottom: 5px; font-family: sans-serif;">📡 R.E.M.A.C</h2>
+            <p style="text-align: center; color: #a0a0c0; font-size: 14px; margin-bottom: 25px; font-family: sans-serif;">Intelligent Raw Material Monitoring System</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        with st.form("login_form", clear_on_submit=False):
+            st.markdown("<p style='color: #a0a0c0; margin-bottom: 5px; font-family: sans-serif;'>Please enter your credentials to access the dashboard.</p>", unsafe_allow_html=True)
+            username = st.text_input("Username", key="login_username", placeholder="Enter username")
+            password = st.text_input("Password", type="password", key="login_password", placeholder="Enter password")
+            submitted = st.form_submit_button("Sign In", use_container_width=True)
+            
+            if submitted:
+                if username == "admin" and password == "admin123":
+                    st.session_state.logged_in = True
+                    st.success("Login successful! Redirecting...")
+                    time.sleep(0.5)
+                    trigger_rerun()
+                else:
+                    st.error("Access Denied: Invalid username or password.")
+        
+        st.markdown("<p style='text-align: center; color: #707090; font-size: 12px; margin-top: 15px; font-family: sans-serif;'>Default credentials: <code>admin</code> / <code>admin123</code></p>", unsafe_allow_html=True)
+    st.stop()
+
+# ============================================================
+# AUTO REFRESH
+# ============================================================
+
+st_autorefresh(
+    interval=5000,
+    key="dashboard_refresh"
 )
 
 # ============================================================
@@ -248,6 +283,14 @@ else:
         st._sim_state["thread"] = threading.Thread(target=simulation_worker, daemon=True)
         st._sim_state["thread"].start()
         trigger_rerun()
+
+# ============================================================
+# LOGOUT CONTROL
+# ============================================================
+st.sidebar.markdown("---")
+if st.sidebar.button("Logout 🚪", key="logout_btn", use_container_width=True):
+    st.session_state.logged_in = False
+    trigger_rerun()
 
 st.sidebar.markdown("---")
 
