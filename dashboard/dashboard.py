@@ -3,11 +3,200 @@ from pathlib import Path
 import time
 import math
 import requests
+import threading
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
+
+# ============================================================
+# PROJECT PATHS
+# ============================================================
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+LIVE_DATA_DIR = BASE_DIR / "live_data"
+
+LIVE_FILE = LIVE_DATA_DIR / "latest.json"
+
+HISTORY_FILE = LIVE_DATA_DIR / "history.csv"
+
+LIVE_DATA_DIR.mkdir(exist_ok=True)
+
+# ============================================================
+# AWS IOT CONFIGURATION (OPTIONAL)
+# ============================================================
+try:
+    from awscrt import mqtt
+    from awsiot import mqtt_connection_builder
+    HAS_AWS = True
+except ImportError:
+    HAS_AWS = False
+
+# ============================================================
+# GLOBAL SIMULATION STATE & WORKER THREAD
+# ============================================================
+if not hasattr(st, "_sim_state"):
+    st._sim_state = {
+        "running": False,
+        "thread": None,
+        "status_text": "Stopped",
+        "current_index": 0
+    }
+
+def clean_nan(val):
+    if isinstance(val, dict):
+        return {k: clean_nan(v) for k, v in val.items()}
+    elif isinstance(val, list):
+        return [clean_nan(x) for x in val]
+    elif isinstance(val, float) and math.isnan(val):
+        return None
+    return val
+
+def simulation_worker():
+    import joblib
+    
+    st._sim_state["status_text"] = "Initializing models & data..."
+    
+    # Load ML Models
+    try:
+        isolation_model = joblib.load(BASE_DIR / "ml_models" / "isolation_forest_model.pkl")
+        rf_model = joblib.load(BASE_DIR / "ml_models" / "random_forest_model.pkl")
+        encoder = joblib.load(BASE_DIR / "ml_models" / "status_encoder.pkl")
+    except Exception as e:
+        st._sim_state["status_text"] = f"Failed to load ML models: {e}"
+        st._sim_state["running"] = False
+        return
+        
+    # Load training data
+    try:
+        training_files = ["Node1_001.csv", "Node1_002.csv", "Node1_003.csv", "Node2.csv"]
+        all_data = []
+        for file in training_files:
+            file_path = BASE_DIR / "datasets" / "training" / file
+            if file_path.exists():
+                all_data.append(pd.read_csv(file_path))
+        if not all_data:
+            raise FileNotFoundError("No training CSV files found.")
+        combined_data = pd.concat(all_data, ignore_index=True)
+    except Exception as e:
+        st._sim_state["status_text"] = f"Failed to load training data: {e}"
+        st._sim_state["running"] = False
+        return
+        
+    # AWS IoT Setup (Optional)
+    mqtt_connection = None
+    if HAS_AWS:
+        try:
+            st._sim_state["status_text"] = "Connecting to AWS IoT..."
+            ENDPOINT = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com"
+            CLIENT_ID = "Remac-Node-1-Cloud"
+            TOPIC = "remac/node1/data"
+            CERT_DIR = BASE_DIR / "CERTIFICATES" / "Remac-Node-1"
+            
+            mqtt_connection = mqtt_connection_builder.mtls_from_path(
+                endpoint=ENDPOINT,
+                cert_filepath=str(CERT_DIR / "dac48685c1e6abf330c38be199ba904aa71eebd042d0d78ec0685dd5e06f8909-certificate.pem.crt"),
+                pri_key_filepath=str(CERT_DIR / "dac48685c1e6abf330c38be199ba904aa71eebd042d0d78ec0685dd5e06f8909-private.pem.key"),
+                ca_filepath=str(CERT_DIR / "AmazonRootCA1.pem"),
+                client_id=CLIENT_ID,
+                clean_session=False,
+                keep_alive_secs=30
+            )
+            mqtt_connection.connect().result()
+        except Exception:
+            mqtt_connection = None
+            
+    st._sim_state["status_text"] = "Running"
+    
+    total_rows = len(combined_data)
+    while st._sim_state["running"]:
+        idx = st._sim_state["current_index"] % total_rows
+        row = combined_data.iloc[idx]
+        
+        # Features
+        features = [[
+            row["Temperature_C"],
+            row["Humidity_%"],
+            row["Distance_cm"],
+            row["Material_Level_%"]
+        ]]
+        
+        # Predictions
+        iso_prediction = isolation_model.predict(features)[0]
+        isolation_result = "NORMAL" if iso_prediction == 1 else "ANOMALY"
+        
+        rf_prediction = rf_model.predict(features)[0]
+        rf_result = encoder.inverse_transform([rf_prediction])[0]
+        
+        # Risks
+        temperature_risk = round((row["Temperature_C"] / 40.0) * 100, 2)
+        humidity_risk = round((row["Humidity_%"] / 60.0) * 100, 2)
+        
+        payload = {
+            "device": row["Device_ID"],
+            "timestamp": str(row["Timestamp"]),
+            "temperature": float(row["Temperature_C"]),
+            "humidity": float(row["Humidity_%"]),
+            "distance": float(row["Distance_cm"]),
+            "material_level": float(row["Material_Level_%"]),
+            "status": row["Status"],
+            "active_alert": row["Active_Alerts"],
+            "random_forest": rf_result,
+            "isolation_forest": isolation_result,
+            "temperature_risk": temperature_risk,
+            "humidity_risk": humidity_risk
+        }
+        
+        # Save locally with retries
+        for attempt in range(5):
+            try:
+                with open(LIVE_FILE, "w") as file:
+                    json.dump(payload, file, indent=4)
+                break
+            except Exception:
+                time.sleep(0.05)
+                
+        # POST to Cloud KV
+        try:
+            requests.post("https://kvdb.io/remac_mvp_7bf9bd4f/latest", json=payload, timeout=2)
+        except Exception:
+            pass
+            
+        # Publish to AWS
+        if mqtt_connection is not None:
+            try:
+                mqtt_connection.publish(
+                    topic="remac/node1/data",
+                    payload=json.dumps(payload),
+                    qos=mqtt.QoS.AT_LEAST_ONCE
+                )
+            except Exception:
+                pass
+                
+        st._sim_state["current_index"] += 1
+        
+        # Sleep in small steps to react quickly to shutdown requests
+        for _ in range(50):
+            if not st._sim_state["running"]:
+                break
+            time.sleep(0.1)
+            
+    # Disconnect AWS if connected
+    if mqtt_connection is not None:
+        try:
+            mqtt_connection.disconnect().result()
+        except Exception:
+            pass
+            
+    st._sim_state["status_text"] = "Stopped"
+
+def trigger_rerun():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
 
 # ============================================================
 # AUTO REFRESH
@@ -30,20 +219,6 @@ st.set_page_config(
 )
 
 # ============================================================
-# PROJECT PATHS
-# ============================================================
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-
-LIVE_DATA_DIR = BASE_DIR / "live_data"
-
-LIVE_FILE = LIVE_DATA_DIR / "latest.json"
-
-HISTORY_FILE = LIVE_DATA_DIR / "history.csv"
-
-LIVE_DATA_DIR.mkdir(exist_ok=True)
-
-# ============================================================
 # PAGE TITLE
 # ============================================================
 
@@ -52,6 +227,29 @@ st.title("📡 R.E.M.A.C Intelligent Raw Material Storage Monitoring System")
 st.caption(
     "Industrial IoT • Machine Learning • AWS IoT Core • Real-Time Monitoring"
 )
+
+# ============================================================
+# SIDEBAR SIMULATION CONTROL
+# ============================================================
+st.sidebar.title("🛰️ Cloud Simulator")
+st.sidebar.markdown("Run the ML data publisher directly in the cloud.")
+
+sim_status = st._sim_state["status_text"]
+st.sidebar.metric("Simulator Status", sim_status)
+
+if st._sim_state["running"]:
+    if st.sidebar.button("🔴 Stop Simulation", key="stop_sim_btn"):
+        st._sim_state["running"] = False
+        trigger_rerun()
+else:
+    if st.sidebar.button("🟢 Start Simulation", key="start_sim_btn"):
+        st._sim_state["running"] = True
+        st._sim_state["status_text"] = "Starting..."
+        st._sim_state["thread"] = threading.Thread(target=simulation_worker, daemon=True)
+        st._sim_state["thread"].start()
+        trigger_rerun()
+
+st.sidebar.markdown("---")
 
 st.markdown("---")
 # ============================================================
@@ -64,14 +262,7 @@ if not LIVE_FILE.exists():
 
     st.stop()
 
-def clean_nan(val):
-    if isinstance(val, dict):
-        return {k: clean_nan(v) for k, v in val.items()}
-    elif isinstance(val, list):
-        return [clean_nan(x) for x in val]
-    elif isinstance(val, float) and math.isnan(val):
-        return None
-    return val
+
 
 data = None
 
