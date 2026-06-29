@@ -1,5 +1,6 @@
 import json
 import time
+import requests
 from pathlib import Path
 
 import joblib
@@ -201,6 +202,12 @@ for index, row in combined_data.iterrows():
             break
         except PermissionError:
             time.sleep(0.1)
+
+    # Sync to Cloud KV store for Render hosting compatibility
+    try:
+        requests.post("https://kvdb.io/remac_mvp_7bf9bd4f/latest", json=payload, timeout=2)
+    except Exception:
+        pass
 
     # ----------------------------
     # Publish to AWS

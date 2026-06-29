@@ -4,3 +4,4 @@ plotly
 joblib
 scikit-learn
 streamlit-autorefresh
+requests

@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 import time
 import math
+import requests
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -73,15 +74,26 @@ def clean_nan(val):
     return val
 
 data = None
-for attempt in range(5):
-    try:
-        with open(LIVE_FILE, "r") as file:
-            raw_data = json.load(file)
-        if raw_data and "timestamp" in raw_data:
-            data = clean_nan(raw_data)
-            break
-    except (PermissionError, json.JSONDecodeError, KeyError, ValueError):
-        time.sleep(0.1)
+
+# First, attempt to read from the cloud key-value store for live synchronization
+try:
+    response = requests.get("https://kvdb.io/remac_mvp_7bf9bd4f/latest", timeout=2)
+    if response.status_code == 200:
+        data = clean_nan(response.json())
+except Exception:
+    pass
+
+# If cloud KV store is down or we are offline, fallback to local latest.json
+if data is None:
+    for attempt in range(5):
+        try:
+            with open(LIVE_FILE, "r") as file:
+                raw_data = json.load(file)
+            if raw_data and "timestamp" in raw_data:
+                data = clean_nan(raw_data)
+                break
+        except (PermissionError, json.JSONDecodeError, KeyError, ValueError):
+            time.sleep(0.1)
 
 if data is None:
     try:

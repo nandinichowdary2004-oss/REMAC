@@ -1,6 +1,7 @@
 import pandas as pd
 import time
 import json
+import requests
 from pathlib import Path
 from openpyxl import Workbook, load_workbook
 
@@ -108,6 +109,12 @@ for index, row in df.iterrows():
             break
         except PermissionError:
             time.sleep(0.1)
+
+    # Sync to Cloud KV store for Render hosting compatibility
+    try:
+        requests.post("https://kvdb.io/remac_mvp_7bf9bd4f/latest", json=dashboard_payload, timeout=2)
+    except Exception:
+        pass
 
     payload = json.dumps(data)
 
