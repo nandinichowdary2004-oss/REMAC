@@ -102,19 +102,21 @@ for index, row in df.iterrows():
 
     live_data_dir = Path("live_data")
     live_data_dir.mkdir(exist_ok=True)
-    for attempt in range(5):
-        try:
-            with open(live_data_dir / "latest.json", "w") as file:
-                json.dump(dashboard_payload, file, indent=4)
-            break
-        except PermissionError:
-            time.sleep(0.1)
+    for filename in ["latest.json", "latest_1.json"]:
+        for attempt in range(5):
+            try:
+                with open(live_data_dir / filename, "w") as file:
+                    json.dump(dashboard_payload, file, indent=4)
+                break
+            except PermissionError:
+                time.sleep(0.1)
 
     # Sync to Cloud KV store for Render hosting compatibility
-    try:
-        requests.post("https://kvdb.io/remac_mvp_7bf9bd4f/latest", json=dashboard_payload, timeout=2)
-    except Exception:
-        pass
+    for endpoint_suffix in ["latest", "latest_1"]:
+        try:
+            requests.post(f"https://kvdb.io/remac_mvp_7bf9bd4f/{endpoint_suffix}", json=dashboard_payload, timeout=2)
+        except Exception:
+            pass
 
     payload = json.dumps(data)
 

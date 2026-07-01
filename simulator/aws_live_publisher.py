@@ -195,19 +195,21 @@ for index, row in combined_data.iterrows():
     # Save latest reading (with retries for Windows file lock robustness)
     # ----------------------------
 
-    for attempt in range(5):
-        try:
-            with open(LIVE_DATA_DIR / "latest.json", "w") as file:
-                json.dump(payload, file, indent=4)
-            break
-        except PermissionError:
-            time.sleep(0.1)
+    for filename in ["latest.json", "latest_1.json"]:
+        for attempt in range(5):
+            try:
+                with open(LIVE_DATA_DIR / filename, "w") as file:
+                    json.dump(payload, file, indent=4)
+                break
+            except PermissionError:
+                time.sleep(0.1)
 
     # Sync to Cloud KV store for Render hosting compatibility
-    try:
-        requests.post("https://kvdb.io/remac_mvp_7bf9bd4f/latest", json=payload, timeout=2)
-    except Exception:
-        pass
+    for endpoint_suffix in ["latest", "latest_1"]:
+        try:
+            requests.post(f"https://kvdb.io/remac_mvp_7bf9bd4f/{endpoint_suffix}", json=payload, timeout=2)
+        except Exception:
+            pass
 
     # ----------------------------
     # Publish to AWS
