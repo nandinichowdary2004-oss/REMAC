@@ -81,12 +81,11 @@ def simulation_worker():
         
     # Load training data
     try:
-        training_files = ["Node1_001.csv", "Node1_002.csv", "Node1_003.csv", "Node2.csv"]
+        training_folder = BASE_DIR / "datasets" / "training"
+        csv_files = list(training_folder.glob("*.csv"))
         all_data = []
-        for file in training_files:
-            file_path = BASE_DIR / "datasets" / "training" / file
-            if file_path.exists():
-                all_data.append(pd.read_csv(file_path))
+        for file_path in csv_files:
+            all_data.append(pd.read_csv(file_path))
         if not all_data:
             raise FileNotFoundError("No training CSV files found.")
         combined_data = pd.concat(all_data, ignore_index=True)
@@ -249,12 +248,11 @@ def trigger_rerun():
 # ============================================================
 def initialize_fallback_data():
     try:
-        training_files = ["Node1_001.csv", "Node1_002.csv", "Node1_003.csv", "Node2.csv"]
+        training_folder = BASE_DIR / "datasets" / "training"
+        csv_files = list(training_folder.glob("*.csv"))
         all_data = []
-        for file in training_files:
-            file_path = BASE_DIR / "datasets" / "training" / file
-            if file_path.exists():
-                all_data.append(pd.read_csv(file_path))
+        for file_path in csv_files:
+            all_data.append(pd.read_csv(file_path))
         if not all_data:
             return
         combined_data = pd.concat(all_data, ignore_index=True)
@@ -419,37 +417,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Subtle flash effect on page refresh (indicator of data feed) and smooth transitions
+# Subtle visual stability style overrides to prevent dimming and flicker on 5-second reruns
 st.markdown("""
 <style>
-    /* Subtle flash glow overlay on page refresh */
-    @keyframes refresh-flash {
-        0% {
-            background-color: rgba(255, 255, 255, 0.04);
-        }
-        100% {
-            background-color: rgba(255, 255, 255, 0.0);
-        }
-    }
-    
-    .stApp {
-        animation: refresh-flash 1.5s ease-out;
-    }
-    
-    /* Smooth transitions for readings, metrics, and charts */
-    @keyframes fade-in {
-        from {
-            opacity: 0.75;
-            transform: translateY(3px);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0);
-        }
-    }
-    
-    .stMetric, .stPlotlyChart, div[data-testid="stMetricValue"], div[data-testid="metric-container"], .element-container {
-        animation: fade-in 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Block default Streamlit running/dimming effect during script execution and prevent flickering/blinking of charts/metrics */
+    [data-testid="stAppViewContainer"], [data-testid="stSidebar"], div.element-container, .stApp, .stMetric, .stPlotlyChart, [data-testid="stPlotlyChart"] {
+        opacity: 1 !important;
+        filter: none !important;
+        transition: none !important;
+        animation: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -734,7 +710,13 @@ else:
         st.error("🔴 Danger Condition")
         
     # Gauge rendering function
-    def create_gauge(title, value, maximum, color):
+    def create_gauge(title, value, maximum, color, steps=None):
+        if steps is None:
+            steps = [
+                {"range": [0, maximum * 0.5], "color": "#E8F5E9"},
+                {"range": [maximum * 0.5, maximum * 0.8], "color": "#FFF3CD"},
+                {"range": [maximum * 0.8, maximum], "color": "#F8D7DA"}
+            ]
         fig = go.Figure(
             go.Indicator(
                 mode="gauge+number",
@@ -743,60 +725,186 @@ else:
                 gauge={
                     "axis": {"range": [0, maximum]},
                     "bar": {"color": color},
-                    "steps": [
-                        {"range": [0, maximum * 0.5], "color": "#E8F5E9"},
-                        {"range": [maximum * 0.5, maximum * 0.8], "color": "#FFF3CD"},
-                        {"range": [maximum * 0.8, maximum], "color": "#F8D7DA"}
-                    ]
+                    "steps": steps
                 }
             )
         )
         fig.update_layout(
             height=270,
-            margin=dict(l=20, r=20, t=50, b=20)
+            margin=dict(l=20, r=20, t=50, b=20),
+            transition={'duration': 0}
         )
         return fig
         
+    # Dynamic values and threshold color calculations
+    temp_threshold = float(st.session_state.get(f"temp_threshold_{selected_unit_id}", 40.0))
+    humidity_threshold = float(st.session_state.get(f"humidity_threshold_{selected_unit_id}", 60.0))
+
+    temp_val = float(data["temperature"])
+    if temp_val <= temp_threshold:
+        temp_color = "green"
+    elif temp_val <= (temp_threshold + 5.0):
+        temp_color = "yellow"
+    else:
+        temp_color = "red"
+    temp_steps = [
+        {"range": [0, temp_threshold], "color": "#E8F5E9"},
+        {"range": [temp_threshold, temp_threshold + 5.0], "color": "#FFF3CD"},
+        {"range": [temp_threshold + 5.0, 50.0], "color": "#F8D7DA"}
+    ]
+
+    humidity_val = float(data["humidity"])
+    if humidity_val <= humidity_threshold:
+        humidity_color = "green"
+    elif humidity_val <= (humidity_threshold + 10.0):
+        humidity_color = "yellow"
+    else:
+        humidity_color = "red"
+    humidity_steps = [
+        {"range": [0, humidity_threshold], "color": "#E8F5E9"},
+        {"range": [humidity_threshold, humidity_threshold + 10.0], "color": "#FFF3CD"},
+        {"range": [humidity_threshold + 10.0, 100.0], "color": "#F8D7DA"}
+    ]
+
+    material_percent_val = float(data["material_level"])
+    if material_percent_val > 50.0:
+        material_percent_color = "green"
+    elif material_percent_val > 20.0:
+        material_percent_color = "yellow"
+    else:
+        material_percent_color = "red"
+    material_percent_steps = [
+        {"range": [0, 20.0], "color": "#F8D7DA"},
+        {"range": [20.0, 50.0], "color": "#FFF3CD"},
+        {"range": [50.0, 100.0], "color": "#E8F5E9"}
+    ]
+
+    # Material level in cm = 40.0 - distance
+    material_level_cm_val = 40.0 - float(data["distance"])
+    if material_level_cm_val > 10.0:
+        material_level_cm_color = "green"
+    elif material_level_cm_val >= 5.0:
+        material_level_cm_color = "yellow"
+    else:
+        material_level_cm_color = "red"
+    material_level_cm_steps = [
+        {"range": [0, 5.0], "color": "#F8D7DA"},
+        {"range": [5.0, 10.0], "color": "#FFF3CD"},
+        {"range": [10.0, 40.0], "color": "#E8F5E9"}
+    ]
+
+    # Helper to render custom HTML progress bars for smooth, blink-free transitions
+    def render_sensor_card(title, value, max_val, unit, color, threshold_info=""):
+        pct = min(100.0, max(0.0, (float(value) / max_val) * 100.0))
+        color_map = {
+            "green": "#2ecc71",
+            "yellow": "#f1c40f",
+            "red": "#e74c3c"
+        }
+        hex_color = color_map.get(color, color)
+        return f"""
+        <div style="
+            background: rgba(30, 30, 47, 0.85);
+            border: 1px solid rgba(58, 58, 92, 0.5);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            margin-bottom: 15px;
+        ">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="color: #a0a0c0; font-size: 14px; font-weight: 600; font-family: sans-serif;">{title}</span>
+                <span style="color: {hex_color}; font-size: 11px; font-weight: 700; background: {hex_color}1a; border: 1px solid {hex_color}33; padding: 2px 8px; border-radius: 20px; font-family: sans-serif; text-transform: uppercase;">
+                    {color}
+                </span>
+            </div>
+            <div style="font-size: 28px; font-weight: 700; color: #ffffff; font-family: sans-serif; margin-bottom: 15px; display: flex; align-items: baseline;">
+                {value:.1f}
+                <span style="font-size: 14px; color: #8888a8; margin-left: 4px; font-weight: 500;">{unit}</span>
+            </div>
+            <div style="
+                background: rgba(255, 255, 255, 0.05);
+                border-radius: 10px;
+                height: 10px;
+                width: 100%;
+                overflow: hidden;
+                position: relative;
+            ">
+                <div style="
+                    background: {hex_color};
+                    width: {pct}%;
+                    height: 100%;
+                    border-radius: 10px;
+                    transition: width 1.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+                    box-shadow: 0 0 8px {hex_color}aa;
+                "></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 11px; color: #6e6e8c; font-family: sans-serif; margin-top: 8px;">
+                <span>0 {unit}</span>
+                <span>{threshold_info}</span>
+                <span>{max_val} {unit}</span>
+            </div>
+        </div>
+        """
+
     # Live Sensor Dashboard Indicators
     st.subheader("📊 Live Sensor Dashboard")
     col1, col2 = st.columns(2)
     with col1:
-        fig_temp = create_gauge("🌡 Temperature (°C)", data["temperature"], 50, "red")
-        st.plotly_chart(fig_temp, use_container_width=True, key=f"temp_gauge_{selected_unit_id}")
+        temp_card_html = render_sensor_card(
+            "🌡 Temperature",
+            temp_val,
+            50.0,
+            "°C",
+            temp_color,
+            f"Limit: {temp_threshold:.0f}°C"
+        )
+        st.markdown(temp_card_html, unsafe_allow_html=True)
     with col2:
-        fig_humidity = create_gauge("💧 Humidity (%)", data["humidity"], 100, "blue")
-        st.plotly_chart(fig_humidity, use_container_width=True, key=f"humidity_gauge_{selected_unit_id}")
+        humidity_card_html = render_sensor_card(
+            "💧 Humidity",
+            humidity_val,
+            100.0,
+            "%",
+            humidity_color,
+            f"Limit: {humidity_threshold:.0f}%"
+        )
+        st.markdown(humidity_card_html, unsafe_allow_html=True)
         
     col3, col4 = st.columns(2)
     with col3:
-        fig_material = create_gauge("📦 Material Level (%)", data["material_level"], 100, "green")
-        st.plotly_chart(fig_material, use_container_width=True, key=f"material_gauge_{selected_unit_id}")
+        material_pct_card_html = render_sensor_card(
+            "📦 Material Percentage",
+            material_percent_val,
+            100.0,
+            "%",
+            material_percent_color,
+            "Limit: > 50%"
+        )
+        st.markdown(material_pct_card_html, unsafe_allow_html=True)
     with col4:
-        fig_distance = create_gauge("📏 Distance (cm)", data["distance"], 30, "orange")
-        st.plotly_chart(fig_distance, use_container_width=True, key=f"distance_gauge_{selected_unit_id}")
+        material_cm_card_html = render_sensor_card(
+            "📦 Material Level",
+            material_level_cm_val,
+            40.0,
+            "cm",
+            material_level_cm_color,
+            "Limit: > 10cm"
+        )
+        st.markdown(material_cm_card_html, unsafe_allow_html=True)
         
     st.markdown("---")
     
     # AI Predictions
     st.subheader("🤖 AI Prediction Engine")
-    col_rf, col_iso = st.columns(2)
-    with col_rf:
-        st.markdown("### 🌲 Random Forest")
-        rf = data["random_forest"]
-        if rf == "SAFE":
-            st.success(f"Prediction : {rf}")
-        elif rf == "WARNING":
-            st.warning(f"Prediction : {rf}")
-        else:
-            st.error(f"Prediction : {rf}")
-            
-    with col_iso:
-        st.markdown("### 🔍 Isolation Forest")
-        iso = data["isolation_forest"]
-        if iso == "NORMAL":
-            st.success(f"Result : {iso}")
-        else:
-            st.error(f"Result : {iso}")
+    rf = data["random_forest"]
+    st.markdown("### Raw Material Status")
+    if rf == "SAFE":
+        st.success(f"Prediction : {rf}")
+    elif rf == "WARNING":
+        st.warning(f"Prediction : {rf}")
+    else:
+        st.error(f"Prediction : {rf}")
             
     st.markdown("---")
     
@@ -903,33 +1011,211 @@ else:
     tab1, tab2, tab3, tab4 = st.tabs([
         "🌡 Temperature",
         "💧 Humidity",
-        "📦 Material Level",
-        "📏 Distance"
+        "📦 Material Percentage",
+        "📦 Material Level (cm)"
     ])
     
+    # Helper to render dynamic, blink-free SVG trend charts with smooth line/marker transitions
+    def render_svg_chart(x_data, y_data, title, yaxis_label, sensor_type, temp_thresh=40.0, humid_thresh=60.0):
+        x_list = list(x_data)
+        y_list = list(y_data)
+        
+        if len(x_list) < 2:
+            return f"<div style='color:#888;padding:40px;text-align:center;background:rgba(30, 30, 47, 0.85);border: 1px solid rgba(58, 58, 92, 0.5);border-radius:12px;'>Awaiting trend data for {title}...</div>"
+            
+        # Scale dimensions
+        width = 800
+        height = 250
+        padding_left = 60
+        padding_right = 20
+        padding_top = 20
+        padding_bottom = 40
+        
+        chart_width = width - padding_left - padding_right
+        chart_height = height - padding_top - padding_bottom
+        
+        # Scale range limits to last 50 points for cleanliness
+        n = len(x_list)
+        max_points = 50
+        if n > max_points:
+            x_list = x_list[-max_points:]
+            y_list = y_list[-max_points:]
+            n = len(x_list)
+        
+        x_max = n - 1
+        y_min_val = min(y_list)
+        y_max_val = max(y_list)
+        y_range = y_max_val - y_min_val
+        
+        if y_range == 0:
+            y_min = y_min_val - 5.0
+            y_max = y_max_val + 5.0
+        else:
+            y_min = y_min_val - 0.1 * y_range
+            y_max = y_max_val + 0.1 * y_range
+            
+        # Coordinates mapper helpers
+        def get_x_pixel(idx):
+            if x_max == 0:
+                return padding_left
+            return padding_left + (idx / x_max) * chart_width
+            
+        def get_y_pixel(val):
+            y_span = y_max - y_min
+            if y_span == 0:
+                return padding_top + chart_height / 2
+            return padding_top + chart_height - ((val - y_min) / y_span) * chart_height
+            
+        # Grid lines and y-axis ticks
+        grid_html = ""
+        for k in range(5):
+            val = y_min + (k / 4.0) * (y_max - y_min)
+            y_px = get_y_pixel(val)
+            grid_html += f'<line x1="{padding_left}" y1="{y_px}" x2="{width - padding_right}" y2="{y_px}" stroke="#2e2e4a" stroke-width="1" stroke-dasharray="4,4" />'
+            grid_html += f'<text x="{padding_left - 10}" y="{y_px + 4}" fill="#a0a0c0" font-size="11" text-anchor="end" font-family="sans-serif">{val:.1f}</text>'
+            
+        # Time axis labels
+        def format_time(t_str):
+            if " " in t_str:
+                return t_str.split(" ")[1]
+            return t_str
+            
+        x_label_start = format_time(x_list[0])
+        x_label_end = format_time(x_list[-1])
+        mid_idx = n // 2
+        x_label_mid = format_time(x_list[mid_idx])
+        
+        grid_html += f'<text x="{padding_left}" y="{height - 12}" fill="#a0a0c0" font-size="11" text-anchor="start" font-family="sans-serif">{x_label_start}</text>'
+        grid_html += f'<text x="{get_x_pixel(mid_idx)}" y="{height - 12}" fill="#a0a0c0" font-size="11" text-anchor="middle" font-family="sans-serif">{x_label_mid}</text>'
+        grid_html += f'<text x="{width - padding_right}" y="{height - 12}" fill="#a0a0c0" font-size="11" text-anchor="end" font-family="sans-serif">{x_label_end}</text>'
+        
+        # Color coding logic
+        def get_color_for_value(val):
+            val = float(val)
+            if sensor_type == "temp":
+                if val <= temp_thresh:
+                    return "#77DD77"  # Safe: green
+                elif val <= (temp_thresh + 5.0):
+                    return "#FFF2A3"  # Risk: pale yellow
+                else:
+                    return "#FF9F9F"  # Danger: pale red
+            elif sensor_type == "humidity":
+                if val <= humid_thresh:
+                    return "#77DD77"  # Safe: green
+                elif val <= (humid_thresh + 10.0):
+                    return "#FFF2A3"  # Risk: pale yellow
+                else:
+                    return "#FF9F9F"  # Danger: pale red
+            elif sensor_type == "material_pct":
+                if val > 50.0:
+                    return "#77DD77"  # Safe: green
+                elif val > 20.0:
+                    return "#FFF2A3"  # Risk: pale yellow
+                else:
+                    return "#FF9F9F"  # Danger: pale red
+            elif sensor_type == "material_cm":
+                if val > 10.0:
+                    return "#77DD77"  # Safe: green
+                elif val >= 5.0:
+                    return "#FFF2A3"  # Risk: pale yellow
+                else:
+                    return "#FF9F9F"  # Danger: pale red
+            return "#77DD77"
+            
+        paths_html = ""
+        markers_html = ""
+        
+        # Render line segments
+        for i in range(n - 1):
+            x1_px = get_x_pixel(i)
+            y1_px = get_y_pixel(y_list[i])
+            x2_px = get_x_pixel(i+1)
+            y2_px = get_y_pixel(y_list[i+1])
+            avg_val = (y_list[i] + y_list[i+1]) / 2.0
+            color = get_color_for_value(avg_val)
+            paths_html += f'<line x1="{x1_px}" y1="{y1_px}" x2="{x2_px}" y2="{y2_px}" stroke="{color}" stroke-width="3" stroke-linecap="round" style="transition: all 0.5s ease-in-out;" />'
+            
+        # Render markers (points)
+        for i in range(n):
+            x_px = get_x_pixel(i)
+            y_px = get_y_pixel(y_list[i])
+            color = get_color_for_value(y_list[i])
+            markers_html += f'<circle cx="{x_px}" cy="{y_px}" r="4.5" fill="{color}" stroke="#1e1e2f" stroke-width="1.5" style="transition: all 0.5s ease-in-out;" />'
+            
+        return f"""
+        <div style="
+            background: rgba(30, 30, 47, 0.85);
+            border: 1px solid rgba(58, 58, 92, 0.5);
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            margin-top: 15px;
+        ">
+            <h4 style="color:#ffffff;margin-top:0;margin-bottom:15px;font-family:sans-serif;font-weight:600;">{title} ({yaxis_label})</h4>
+            <svg viewBox="0 0 {width} {height}" width="100%" height="auto" style="overflow: visible;">
+                {grid_html}
+                <line x1="{padding_left}" y1="{padding_top}" x2="{padding_left}" y2="{height - padding_bottom}" stroke="#3a3a5c" stroke-width="1.5" />
+                <line x1="{padding_left}" y1="{height - padding_bottom}" x2="{width - padding_right}" y2="{height - padding_bottom}" stroke="#3a3a5c" stroke-width="1.5" />
+                {paths_html}
+                {markers_html}
+            </svg>
+        </div>
+        """
+
+    # Get threshold values for temp/humidity
+    temp_threshold = float(st.session_state.get(f"temp_threshold_{selected_unit_id}", 40.0))
+    humidity_threshold = float(st.session_state.get(f"humidity_threshold_{selected_unit_id}", 60.0))
+
     with tab1:
-        temp_fig = go.Figure()
-        temp_fig.add_trace(go.Scatter(x=history["Timestamp"], y=history["Temperature"], mode="lines+markers", name="Temperature"))
-        temp_fig.update_layout(title="Temperature Trend", xaxis_title="Time", yaxis_title="°C", height=350)
-        st.plotly_chart(temp_fig, use_container_width=True, key=f"temperature_trend_chart_{selected_unit_id}")
+        temp_chart_html = render_svg_chart(
+            history["Timestamp"],
+            history["Temperature"],
+            "Temperature Trend",
+            "°C",
+            "temp",
+            temp_threshold,
+            humidity_threshold
+        )
+        st.markdown(temp_chart_html, unsafe_allow_html=True)
         
     with tab2:
-        humidity_fig = go.Figure()
-        humidity_fig.add_trace(go.Scatter(x=history["Timestamp"], y=history["Humidity"], mode="lines+markers", name="Humidity"))
-        humidity_fig.update_layout(title="Humidity Trend", xaxis_title="Time", yaxis_title="%", height=350)
-        st.plotly_chart(humidity_fig, use_container_width=True, key=f"humidity_trend_chart_{selected_unit_id}")
+        humidity_chart_html = render_svg_chart(
+            history["Timestamp"],
+            history["Humidity"],
+            "Humidity Trend",
+            "%",
+            "humidity",
+            temp_threshold,
+            humidity_threshold
+        )
+        st.markdown(humidity_chart_html, unsafe_allow_html=True)
         
     with tab3:
-        material_fig = go.Figure()
-        material_fig.add_trace(go.Scatter(x=history["Timestamp"], y=history["Material_Level"], mode="lines+markers", name="Material Level"))
-        material_fig.update_layout(title="Material Level Trend", xaxis_title="Time", yaxis_title="%", height=350)
-        st.plotly_chart(material_fig, use_container_width=True, key=f"material_trend_chart_{selected_unit_id}")
+        material_chart_html = render_svg_chart(
+            history["Timestamp"],
+            history["Material_Level"],
+            "Material Percentage Trend",
+            "%",
+            "material_pct",
+            temp_threshold,
+            humidity_threshold
+        )
+        st.markdown(material_chart_html, unsafe_allow_html=True)
         
     with tab4:
-        distance_fig = go.Figure()
-        distance_fig.add_trace(go.Scatter(x=history["Timestamp"], y=history["Distance"], mode="lines+markers", name="Distance"))
-        distance_fig.update_layout(title="Distance Trend", xaxis_title="Time", yaxis_title="cm", height=350)
-        st.plotly_chart(distance_fig, use_container_width=True, key=f"distance_trend_chart_{selected_unit_id}")
+        # Convert Distance history to Material Level (cm)
+        history_cm = 40.0 - history["Distance"]
+        material_cm_chart_html = render_svg_chart(
+            history["Timestamp"],
+            history_cm,
+            "Material Level (cm) Trend",
+            "cm",
+            "material_cm",
+            temp_threshold,
+            humidity_threshold
+        )
+        st.markdown(material_cm_chart_html, unsafe_allow_html=True)
         
     st.markdown("---")
     
@@ -940,7 +1226,7 @@ else:
         st.success("☁ AWS IoT Core")
         st.caption("Connected")
     with h2:
-        st.success("🤖 Machine Learning")
+        st.success("🤖 R.E.M.A.C System")
         st.caption("Running")
     with h3:
         st.success("📡 Dashboard")
@@ -948,5 +1234,5 @@ else:
         
     st.markdown("---")
     st.caption("REMAC Intelligent Raw Material Storage Monitoring System")
-    st.caption("Powered by Python • Streamlit • AWS IoT Core • Random Forest • Isolation Forest")
+    st.caption("Powered by Python • Streamlit • AWS IoT Core • Random Forest")
     st.caption("Version 1.0 | Academic MVP Demonstration")

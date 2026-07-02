@@ -4,24 +4,15 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import LabelEncoder
 import joblib
 
-training_folder = Path("datasets") / "training"
+training_folder = Path("datasets/training")
 
-training_files = [
-    "Node1_001.csv",
-    "Node1_002.csv",
-    "Node1_003.csv",
-    "Node2.csv"
-]
+csv_files = list(training_folder.glob("*.csv"))
 
 all_data = []
 
-for file in training_files:
-    file_path = training_folder / file
-
-    print(file_path)
-
+for file_path in csv_files:
+    print(f"Loading {file_path.name}")
     df = pd.read_csv(file_path)
-
     all_data.append(df)
 
 combined_data = pd.concat(all_data, ignore_index=True)
