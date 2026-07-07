@@ -1013,3 +1013,14 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 4px;
 }
+
+.btn-start-sim {
+  background: rgba(46, 204, 113, 0.1) !important;
+  border-color: rgba(46, 204, 113, 0.3) !important;
+  color: var(--safe) !important;
+}
+
+.btn-start-sim:hover {
+  background: rgba(46, 204, 113, 0.2) !important;
+  border-color: var(--safe) !important;
+}

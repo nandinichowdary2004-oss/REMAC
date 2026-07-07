@@ -30,6 +30,25 @@ export default function App() {
   const [unitsData, setUnitsData] = useState({});
   const [unitsHistory, setUnitsHistory] = useState({});
   const [isSimulatorActive, setIsSimulatorActive] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(() => {
+    return localStorage.getItem('remac_sim_running') !== 'false';
+  });
+
+  // Toggle Remote and Local Simulation
+  const toggleSimulation = async () => {
+    const nextVal = !isSimulating;
+    setIsSimulating(nextVal);
+    localStorage.setItem('remac_sim_running', String(nextVal));
+    try {
+      await fetch('https://kvdb.io/remac_mvp_7bf9bd4f/sim_command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ running: nextVal })
+      });
+    } catch (e) {
+      console.error("Failed to sync simulation state to cloud:", e);
+    }
+  };
 
   // Environmental Systems States (persisted per Unit ID)
   const [envStates, setEnvStates] = useState(() => {
@@ -78,6 +97,7 @@ export default function App() {
     setPassword('');
   };
 
+
   // Run environmental systems timers (accumulates active AC & Dryer runtimes every second)
   useEffect(() => {
     if (!loggedIn) return;
@@ -123,6 +143,8 @@ export default function App() {
     if (!loggedIn) return;
 
     const updateTelemetry = async () => {
+      if (!isSimulating) return; // Freeze updates if simulation is stopped
+
       const newUnitsData = { ...unitsData };
       const newUnitsHistory = { ...unitsHistory };
       let dataChanged = false;
@@ -239,7 +261,7 @@ export default function App() {
     // Setup 5 second refresh interval
     const interval = setInterval(updateTelemetry, 5000);
     return () => clearInterval(interval);
-  }, [loggedIn, unitsData, unitsHistory]);
+  }, [loggedIn, unitsData, unitsHistory, isSimulating]);
 
   // Adjust environmental system status automatically when temperature/humidity changes
   useEffect(() => {
@@ -343,9 +365,15 @@ export default function App() {
         </div>
         <div className="header-actions">
           <div className="sim-indicator">
-            <span className={`sim-dot ${isSimulatorActive ? 'active' : ''}`}></span>
-            <span>{isSimulatorActive ? "Cloud Sync Active" : "Local Mock Simulating"}</span>
+            <span className={`sim-dot ${isSimulating && isSimulatorActive ? 'active' : ''}`}></span>
+            <span>{isSimulating ? (isSimulatorActive ? "Cloud Sync Active" : "Local Mock Simulating") : "Simulation Paused"}</span>
           </div>
+          <button 
+            className={`btn-secondary ${isSimulating ? 'btn-logout' : 'btn-start-sim'}`} 
+            onClick={toggleSimulation}
+          >
+            {isSimulating ? "🔴 Stop Simulation" : "🟢 Start Simulation"}
+          </button>
           {selectedUnitId !== null && (
             <button className="btn-secondary" onClick={() => setSelectedUnitId(null)}>
               🏠 Back to Homepage

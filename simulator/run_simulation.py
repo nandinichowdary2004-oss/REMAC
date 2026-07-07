@@ -115,6 +115,18 @@ def run_simulator():
     current_index = 0
     try:
         while True:
+            # Check Cloud Command to see if simulation was stopped
+            try:
+                cmd_res = requests.get("https://kvdb.io/remac_mvp_7bf9bd4f/sim_command", timeout=2)
+                if cmd_res.status_code == 200:
+                    cmd_data = cmd_res.json()
+                    if not cmd_data.get("running", True):
+                        print("⏸️ Simulation paused by cloud command. Standby active...")
+                        time.sleep(5)
+                        continue
+            except Exception:
+                pass
+
             for unit in STORAGE_UNITS:
                 u_id = unit["id"]
                 idx = (current_index + u_id * 100) % total_rows
