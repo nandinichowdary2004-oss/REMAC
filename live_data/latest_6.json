@@ -1,0 +1,14 @@
+{
+    "device": "REMAC_PS_006",
+    "timestamp": "2026-06-01 09:22:35",
+    "temperature": 25.0,
+    "humidity": 31.8,
+    "distance": 16.95,
+    "material_level": 60.7,
+    "status": "SAFE",
+    "active_alert": NaN,
+    "random_forest": "SAFE",
+    "isolation_forest": "ANOMALY",
+    "temperature_risk": 62.5,
+    "humidity_risk": 53.0
+}

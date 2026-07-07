@@ -1,0 +1,14 @@
+{
+    "device": "REMAC_PVC_003",
+    "timestamp": "2026-06-01 08:57:35",
+    "temperature": 25.4,
+    "humidity": 26.2,
+    "distance": 27.19,
+    "material_level": 33.7,
+    "status": "SAFE",
+    "active_alert": NaN,
+    "random_forest": "SAFE",
+    "isolation_forest": "ANOMALY",
+    "temperature_risk": 63.5,
+    "humidity_risk": 43.67
+}

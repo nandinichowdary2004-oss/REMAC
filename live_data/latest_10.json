@@ -1,0 +1,14 @@
+{
+    "device": "REMAC_NYLON_010",
+    "timestamp": "2026-06-01 08:32:35",
+    "temperature": 33.0,
+    "humidity": 47.7,
+    "distance": 39.09,
+    "material_level": 2.4,
+    "status": "DANGER",
+    "active_alert": "Low Material Level",
+    "random_forest": "DANGER",
+    "isolation_forest": "NORMAL",
+    "temperature_risk": 82.5,
+    "humidity_risk": 79.5
+}

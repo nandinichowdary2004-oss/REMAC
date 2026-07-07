@@ -1,0 +1,14 @@
+{
+    "device": "REMAC_LDPE_004",
+    "timestamp": "2026-06-01 09:05:55",
+    "temperature": 33.0,
+    "humidity": 30.1,
+    "distance": 14.72,
+    "material_level": 66.5,
+    "status": "SAFE",
+    "active_alert": NaN,
+    "random_forest": "SAFE",
+    "isolation_forest": "NORMAL",
+    "temperature_risk": 82.5,
+    "humidity_risk": 50.17
+}

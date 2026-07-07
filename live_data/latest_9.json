@@ -1,0 +1,14 @@
+{
+    "device": "REMAC_PMMA_009",
+    "timestamp": "2026-06-01 08:24:15",
+    "temperature": 34.3,
+    "humidity": 45.0,
+    "distance": 9.98,
+    "material_level": 79.0,
+    "status": "SAFE",
+    "active_alert": NaN,
+    "random_forest": "SAFE",
+    "isolation_forest": "NORMAL",
+    "temperature_risk": 85.75,
+    "humidity_risk": 75.0
+}
