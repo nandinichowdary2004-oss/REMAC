@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: remac-mvp
+    runtime: node
+    buildCommand: cd frontend && npm install && npm run build
+    startCommand: node server.js
+    plan: free
