@@ -199,15 +199,15 @@ export default function App() {
         let livePayload = null;
         let historyPayload = null;
         
-        // 1. Try to fetch latest reading from free anonymous JSONBlob
+        // 1. Fetch latest reading from local REMAC Express server API
         try {
-          const res = await fetch(`https://jsonblob.com/api/jsonBlob/${unit.blob_id}`);
+          const res = await fetch(`/api/telemetry/${unit.id}`);
           if (res.ok) {
             livePayload = await res.json();
             setIsSimulatorActive(true);
           }
         } catch (e) {
-          console.warn("JSONBlob fetch failed:", e);
+          console.warn("Express server fetch failed:", e);
         }
 
         // Only fall back to dummy mock data if simulation is enabled
