@@ -16,6 +16,13 @@ const STORAGE_UNITS = [
   { id: 10, name: "Storage Unit 10", material: "Nylon (Polyamide)", device_id: "REMAC_NYLON_010", default_temp: 30.0, default_humid: 35.0 },
 ];
 
+// ============================================================
+// CLOUD STORAGE CONFIGURATION (S3 & KVDB)
+// ============================================================
+// If you want to use S3, provide your bucket HTTP endpoint here (e.g., "https://remac-telemetry.s3.amazonaws.com")
+// Otherwise, leave it empty to fall back to the default KVDB.io cloud bucket.
+const AWS_S3_BUCKET_URL = "";
+
 export default function App() {
   // Authentication State
   const [loggedIn, setLoggedIn] = useState(() => {
@@ -31,7 +38,7 @@ export default function App() {
   const [unitsHistory, setUnitsHistory] = useState({});
   const [isSimulatorActive, setIsSimulatorActive] = useState(false);
   const [isSimulating, setIsSimulating] = useState(() => {
-    return localStorage.getItem('remac_sim_running') !== 'false';
+    return localStorage.getItem('remac_sim_running') === 'true';
   });
 
   // Toggle Remote and Local Simulation
@@ -143,13 +150,11 @@ export default function App() {
     if (!loggedIn) return;
 
     const updateTelemetry = async () => {
-      if (!isSimulating) return; // Freeze updates if simulation is stopped
-
       const newUnitsData = { ...unitsData };
       const newUnitsHistory = { ...unitsHistory };
       let dataChanged = false;
 
-      // Helper to generate a drift-based mock state if cloud fetch fails
+      // Helper to generate a drift-based mock state if cloud fetch fails and simulation is enabled
       const getDriftedState = (unit, prevVal) => {
         const t_drift = (Math.random() - 0.5) * 0.4;
         const h_drift = (Math.random() - 0.5) * 0.6;
@@ -194,59 +199,109 @@ export default function App() {
         let livePayload = null;
         let historyPayload = null;
         
-        // 1. Try to fetch latest reading from Cloud KVDB
+        // 1. Try to fetch latest reading from S3 if configured, otherwise fall back to KVDB
         try {
-          const res = await fetch(`https://kvdb.io/remac_mvp_7bf9bd4f/latest_${unit.id}`);
-          if (res.ok) {
-            livePayload = await res.json();
-            setIsSimulatorActive(true); // If we successfully connect, simulator is running
+          if (AWS_S3_BUCKET_URL) {
+            const res = await fetch(`${AWS_S3_BUCKET_URL}/latest_${unit.id}.json`, { cache: 'no-store' });
+            if (res.ok) {
+              livePayload = await res.json();
+              setIsSimulatorActive(true);
+            }
           }
         } catch (e) {
-          // Ignore, fallback to local simulator
+          console.warn("S3 fetch failed, trying KVDB...", e);
         }
 
-        // 2. Try to fetch history from Cloud KVDB
-        try {
-          const res = await fetch(`https://kvdb.io/remac_mvp_7bf9bd4f/history_${unit.id}`);
-          if (res.ok) {
-            historyPayload = await res.json();
-          }
-        } catch (e) {
-          // Ignore
-        }
-
-        // If Cloud KV fails, generate mock drifted telemetry to keep UI responsive
         if (!livePayload) {
-          livePayload = getDriftedState(unit, unitsData[unit.id]);
-        }
-
-        newUnitsData[unit.id] = livePayload;
-        
-        // Process historical trend list
-        let histList = [];
-        if (historyPayload && Array.isArray(historyPayload)) {
-          histList = historyPayload;
-        } else {
-          // Fallback to local running history accumulator
-          const prevHist = unitsHistory[unit.id] || [];
-          const newPt = {
-            Timestamp: livePayload.timestamp,
-            Temperature: livePayload.temperature,
-            Humidity: livePayload.humidity,
-            Distance: livePayload.distance,
-            Material_Level: livePayload.material_level
-          };
-
-          // Deduplicate based on timestamp
-          if (prevHist.length === 0 || prevHist[prevHist.length - 1].Timestamp !== newPt.Timestamp) {
-            histList = [...prevHist, newPt].slice(-20);
-          } else {
-            histList = prevHist;
+          try {
+            const res = await fetch(`https://kvdb.io/remac_mvp_7bf9bd4f/latest_${unit.id}`);
+            if (res.ok) {
+              livePayload = await res.json();
+              setIsSimulatorActive(true);
+            }
+          } catch (e) {
+            // Ignore
           }
         }
 
-        newUnitsHistory[unit.id] = histList;
-        dataChanged = true;
+        // 2. Try to fetch history from S3 if configured, otherwise fall back to KVDB
+        try {
+          if (AWS_S3_BUCKET_URL) {
+            const res = await fetch(`${AWS_S3_BUCKET_URL}/history_${unit.id}.json`, { cache: 'no-store' });
+            if (res.ok) {
+              historyPayload = await res.json();
+            }
+          }
+        } catch (e) {
+          console.warn("S3 history fetch failed, trying KVDB...", e);
+        }
+
+        if (!historyPayload) {
+          try {
+            const res = await fetch(`https://kvdb.io/remac_mvp_7bf9bd4f/history_${unit.id}`);
+            if (res.ok) {
+              historyPayload = await res.json();
+            }
+          } catch (e) {
+            // Ignore
+          }
+        }
+
+        // Only fall back to dummy mock data if simulation is enabled
+        if (!livePayload) {
+          if (isSimulating) {
+            livePayload = getDriftedState(unit, unitsData[unit.id]);
+          } else {
+            livePayload = null;
+          }
+        }
+
+        if (livePayload) {
+          newUnitsData[unit.id] = livePayload;
+          
+          // Process historical trend list
+          let histList = [];
+          if (historyPayload && Array.isArray(historyPayload)) {
+            histList = historyPayload;
+          } else {
+            const prevHist = unitsHistory[unit.id] || [];
+            const newPt = {
+              Timestamp: livePayload.timestamp,
+              Temperature: livePayload.temperature,
+              Humidity: livePayload.humidity,
+              Distance: livePayload.distance,
+              Material_Level: livePayload.material_level
+            };
+
+            if (prevHist.length === 0 || prevHist[prevHist.length - 1].Timestamp !== newPt.Timestamp) {
+              histList = [...prevHist, newPt].slice(-20);
+            } else {
+              histList = prevHist;
+            }
+          }
+          newUnitsHistory[unit.id] = histList;
+          dataChanged = true;
+        } else {
+          // If no data is available (device offline and simulation off)
+          if (unitsData[unit.id] && unitsData[unit.id].status !== "OFFLINE") {
+            newUnitsData[unit.id] = {
+              device: unit.device_id,
+              timestamp: "--:--:--",
+              temperature: 0,
+              humidity: 0,
+              distance: 0,
+              material_level: 0,
+              status: "OFFLINE",
+              active_alert: "Device Offline / No Data Received",
+              random_forest: "OFFLINE",
+              isolation_forest: "UNKNOWN",
+              temperature_risk: 0,
+              humidity_risk: 0
+            };
+            newUnitsHistory[unit.id] = [];
+            dataChanged = true;
+          }
+        }
       }
 
       if (dataChanged) {
@@ -365,14 +420,14 @@ export default function App() {
         </div>
         <div className="header-actions">
           <div className="sim-indicator">
-            <span className={`sim-dot ${isSimulating && isSimulatorActive ? 'active' : ''}`}></span>
-            <span>{isSimulating ? (isSimulatorActive ? "Cloud Sync Active" : "Local Mock Simulating") : "Simulation Paused"}</span>
+            <span className={`sim-dot ${!isSimulating ? 'active' : ''}`}></span>
+            <span>{isSimulating ? "🧪 Simulation Mode (Demo)" : "🔌 Live Hardware Mode"}</span>
           </div>
           <button 
             className={`btn-secondary ${isSimulating ? 'btn-logout' : 'btn-start-sim'}`} 
             onClick={toggleSimulation}
           >
-            {isSimulating ? "🔴 Stop Simulation" : "🟢 Start Simulation"}
+            {isSimulating ? "🔌 Switch to Live Hardware" : "🧪 Switch to Simulation"}
           </button>
           {selectedUnitId !== null && (
             <button className="btn-secondary" onClick={() => setSelectedUnitId(null)}>
