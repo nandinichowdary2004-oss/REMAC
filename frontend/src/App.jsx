@@ -4,16 +4,16 @@ import React, { useState, useEffect, useRef } from 'react';
 // STORAGE UNITS CONFIGURATION
 // ============================================================
 const STORAGE_UNITS = [
-  { id: 1, name: "Storage Unit 1", material: "PET (Polyethylene Terephthalate)", device_id: "REMAC_PET_001", default_temp: 35.0, default_humid: 40.0 },
-  { id: 2, name: "Storage Unit 2", material: "HDPE (High-Density Polyethylene)", device_id: "REMAC_HDPE_002", default_temp: 40.0, default_humid: 65.0 },
-  { id: 3, name: "Storage Unit 3", material: "PVC (Polyvinyl Chloride)", device_id: "REMAC_PVC_003", default_temp: 30.0, default_humid: 50.0 },
-  { id: 4, name: "Storage Unit 4", material: "LDPE (Low-Density Polyethylene)", device_id: "REMAC_LDPE_004", default_temp: 35.0, default_humid: 65.0 },
-  { id: 5, name: "Storage Unit 5", material: "PP (Polypropylene)", device_id: "REMAC_PP_005", default_temp: 40.0, default_humid: 65.0 },
-  { id: 6, name: "Storage Unit 6", material: "PS (Polystyrene)", device_id: "REMAC_PS_006", default_temp: 35.0, default_humid: 55.0 },
-  { id: 7, name: "Storage Unit 7", material: "ABS (Acrylonitrile Butadiene Styrene)", device_id: "REMAC_ABS_007", default_temp: 35.0, default_humid: 50.0 },
-  { id: 8, name: "Storage Unit 8", material: "PC (Polycarbonate)", device_id: "REMAC_PC_008", default_temp: 35.0, default_humid: 45.0 },
-  { id: 9, name: "Storage Unit 9", material: "PMMA (Acrylic)", device_id: "REMAC_PMMA_009", default_temp: 30.0, default_humid: 50.0 },
-  { id: 10, name: "Storage Unit 10", material: "Nylon (Polyamide)", device_id: "REMAC_NYLON_010", default_temp: 30.0, default_humid: 35.0 },
+  { id: 1, name: "Storage Unit 1", material: "PET (Polyethylene Terephthalate)", device_id: "REMAC_PET_001", default_temp: 35.0, default_humid: 40.0, blob_id: "019f46e1-3345-7a4a-bea7-c6601ddabfea" },
+  { id: 2, name: "Storage Unit 2", material: "HDPE (High-Density Polyethylene)", device_id: "REMAC_HDPE_002", default_temp: 40.0, default_humid: 65.0, blob_id: "019f46e1-3f47-7346-aae4-48e0de4bd33b" },
+  { id: 3, name: "Storage Unit 3", material: "PVC (Polyvinyl Chloride)", device_id: "REMAC_PVC_003", default_temp: 30.0, default_humid: 50.0, blob_id: "019f46e1-4885-7bd6-a8cd-3c2866eb0398" },
+  { id: 4, name: "Storage Unit 4", material: "LDPE (Low-Density Polyethylene)", device_id: "REMAC_LDPE_004", default_temp: 35.0, default_humid: 65.0, blob_id: "019f46e1-51de-7094-b331-1e2978b9c38a" },
+  { id: 5, name: "Storage Unit 5", material: "PP (Polypropylene)", device_id: "REMAC_PP_005", default_temp: 40.0, default_humid: 65.0, blob_id: "019f46e1-5b40-7fff-95eb-d0e6f98312a6" },
+  { id: 6, name: "Storage Unit 6", material: "PS (Polystyrene)", device_id: "REMAC_PS_006", default_temp: 35.0, default_humid: 55.0, blob_id: "019f46e1-64ab-7c94-a01c-ddb12f9dbf58" },
+  { id: 7, name: "Storage Unit 7", material: "ABS (Acrylonitrile Butadiene Styrene)", device_id: "REMAC_ABS_007", default_temp: 35.0, default_humid: 50.0, blob_id: "019f46e1-960b-7b80-8030-ddfa51529428" },
+  { id: 8, name: "Storage Unit 8", material: "PC (Polycarbonate)", device_id: "REMAC_PC_008", default_temp: 35.0, default_humid: 45.0, blob_id: "019f46e1-c76c-776d-80eb-028449bceb01" },
+  { id: 9, name: "Storage Unit 9", material: "PMMA (Acrylic)", device_id: "REMAC_PMMA_009", default_temp: 30.0, default_humid: 50.0, blob_id: "019f46e1-d103-7ed2-a9ab-3fda16802731" },
+  { id: 10, name: "Storage Unit 10", material: "Nylon (Polyamide)", device_id: "REMAC_NYLON_010", default_temp: 30.0, default_humid: 35.0, blob_id: "019f46e2-0246-73e1-b49b-a7ef5a575eb1" },
 ];
 
 // ============================================================
@@ -199,52 +199,15 @@ export default function App() {
         let livePayload = null;
         let historyPayload = null;
         
-        // 1. Try to fetch latest reading from S3 if configured, otherwise fall back to KVDB
+        // 1. Try to fetch latest reading from free anonymous JSONBlob
         try {
-          if (AWS_S3_BUCKET_URL) {
-            const res = await fetch(`${AWS_S3_BUCKET_URL}/latest_${unit.id}.json`, { cache: 'no-store' });
-            if (res.ok) {
-              livePayload = await res.json();
-              setIsSimulatorActive(true);
-            }
+          const res = await fetch(`https://jsonblob.com/api/jsonBlob/${unit.blob_id}`);
+          if (res.ok) {
+            livePayload = await res.json();
+            setIsSimulatorActive(true);
           }
         } catch (e) {
-          console.warn("S3 fetch failed, trying KVDB...", e);
-        }
-
-        if (!livePayload) {
-          try {
-            const res = await fetch(`https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_${unit.id}`);
-            if (res.ok) {
-              livePayload = await res.json();
-              setIsSimulatorActive(true);
-            }
-          } catch (e) {
-            // Ignore
-          }
-        }
-
-        // 2. Try to fetch history from S3 if configured, otherwise fall back to KVDB
-        try {
-          if (AWS_S3_BUCKET_URL) {
-            const res = await fetch(`${AWS_S3_BUCKET_URL}/history_${unit.id}.json`, { cache: 'no-store' });
-            if (res.ok) {
-              historyPayload = await res.json();
-            }
-          }
-        } catch (e) {
-          console.warn("S3 history fetch failed, trying KVDB...", e);
-        }
-
-        if (!historyPayload) {
-          try {
-            const res = await fetch(`https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/history_${unit.id}`);
-            if (res.ok) {
-              historyPayload = await res.json();
-            }
-          } catch (e) {
-            // Ignore
-          }
+          console.warn("JSONBlob fetch failed:", e);
         }
 
         // Only fall back to dummy mock data if simulation is enabled
