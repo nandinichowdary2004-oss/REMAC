@@ -47,7 +47,7 @@ export default function App() {
     setIsSimulating(nextVal);
     localStorage.setItem('remac_sim_running', String(nextVal));
     try {
-      await fetch('https://kvdb.io/remac_mvp_7bf9bd4f/sim_command', {
+      await fetch('https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/sim_command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ running: nextVal })
@@ -214,7 +214,7 @@ export default function App() {
 
         if (!livePayload) {
           try {
-            const res = await fetch(`https://kvdb.io/remac_mvp_7bf9bd4f/latest_${unit.id}`);
+            const res = await fetch(`https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/latest_${unit.id}`);
             if (res.ok) {
               livePayload = await res.json();
               setIsSimulatorActive(true);
@@ -238,7 +238,7 @@ export default function App() {
 
         if (!historyPayload) {
           try {
-            const res = await fetch(`https://kvdb.io/remac_mvp_7bf9bd4f/history_${unit.id}`);
+            const res = await fetch(`https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/history_${unit.id}`);
             if (res.ok) {
               historyPayload = await res.json();
             }

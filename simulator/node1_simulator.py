@@ -114,7 +114,7 @@ for index, row in df.iterrows():
     # Sync to Cloud KV store for Render hosting compatibility
     for endpoint_suffix in ["latest", "latest_1"]:
         try:
-            requests.post(f"https://kvdb.io/remac_mvp_7bf9bd4f/{endpoint_suffix}", json=dashboard_payload, timeout=2)
+            requests.post(f"https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/{endpoint_suffix}", json=dashboard_payload, timeout=2)
         except Exception:
             pass
 
