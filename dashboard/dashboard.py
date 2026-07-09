@@ -173,7 +173,7 @@ def simulation_worker():
                     
             # POST to Cloud KV
             try:
-                requests.post(f"https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/latest_{u_id}", json=payload, timeout=2)
+                requests.post(f"https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_{u_id}", json=payload, timeout=2)
             except Exception:
                 pass
                 
@@ -643,7 +643,7 @@ else:
     
     data = None
     try:
-        response = requests.get(f"https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/latest_{selected_unit_id}", timeout=2)
+        response = requests.get(f"https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_{selected_unit_id}", timeout=2)
         if response.status_code == 200:
             data = clean_nan(response.json())
     except Exception:

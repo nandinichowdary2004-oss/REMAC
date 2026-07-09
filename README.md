@@ -73,4 +73,4 @@ npm run dev
 ## ☁️ Cloud & IoT Integrations
 
 *   **AWS IoT Core:** Node 1 can publish live MQTT payloads to the AWS IoT Core endpoint (`a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com`) using certificates stored in the `CERTIFICATES/` directory.
-*   **KVDB.io Cloud Sync:** Telemetry endpoints and simulation commands sync with a KVDB database bucket (`GXrQha8LsrxhmL2EL7TNGC`) for seamless command propagation between the dashboards and the backend simulation.
+*   **KVDB.io Cloud Sync:** Telemetry endpoints and simulation commands sync with a KVDB database bucket (`4fm9CKFheYEj7fqeaijvJz`) for seamless command propagation between the dashboards and the backend simulation.

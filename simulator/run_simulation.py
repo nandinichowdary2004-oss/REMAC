@@ -117,7 +117,7 @@ def run_simulator():
         while True:
             # Check Cloud Command to see if simulation was stopped
             try:
-                cmd_res = requests.get("https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/sim_command", timeout=2)
+                cmd_res = requests.get("https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/sim_command", timeout=2)
                 if cmd_res.status_code == 200:
                     cmd_data = cmd_res.json()
                     if not cmd_data.get("running", True):
@@ -180,8 +180,8 @@ def run_simulator():
 
                 # POST Latest to Cloud KV
                 try:
-                    res_lat = requests.post(f"https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/latest_{u_id}", json=payload, timeout=2)
-                    res_hist = requests.post(f"https://kvdb.io/GXrQha8LsrxhmL2EL7TNGC/history_{u_id}", json=history_tracks[u_id], timeout=2)
+                    res_lat = requests.post(f"https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_{u_id}", json=payload, timeout=2)
+                    res_hist = requests.post(f"https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/history_{u_id}", json=history_tracks[u_id], timeout=2)
                 except Exception as e:
                     pass
 
