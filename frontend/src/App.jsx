@@ -211,7 +211,7 @@ export default function App() {
         } catch (e) {
           // Fallback to KVDB.io cloud storage directly in browser (works without local python server!)
           try {
-            const res = await fetch(`https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_${unit.id}`);
+            const res = await fetch(`https://kvdb.io/remac_live_v1_9a8b7c/latest_${unit.id}`);
             if (res.ok) {
               livePayload = await res.json();
               setIsSimulatorActive(true);

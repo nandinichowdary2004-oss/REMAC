@@ -17,7 +17,7 @@ const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
 // Free Cloud KVDB.io configuration (Does NOT require any PC server or signup!)
-const String cloud_kvdb_url = "https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_1";
+const String cloud_kvdb_url = "https://kvdb.io/remac_live_v1_9a8b7c/latest_1";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
