@@ -21,6 +21,42 @@ class LocalTelemetryHandler(SimpleHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
+    def do_GET(self):
+        # Path structure: /api/telemetry/:unitId
+        path_parts = self.path.strip('/').split('/')
+        if len(path_parts) >= 2 and path_parts[0] == 'api' and path_parts[1] == 'telemetry':
+            unit_id = path_parts[-1]
+            filename = f"latest_{unit_id}.json"
+            filepath = os.path.join(LIVE_DATA_DIR, filename)
+            
+            if os.path.exists(filepath):
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                with open(filepath, 'rb') as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_response(404)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({"error": f"No telemetry data found for unit {unit_id}"}).encode('utf-8'))
+            return
+        
+        # Fallback to serving static files from frontend/dist
+        super().do_GET()
+
+    def translate_path(self, path):
+        # Serve static files from the frontend/dist folder
+        clean_path = path.split('?')[0].split('#')[0]
+        dist_dir = os.path.join(os.getcwd(), 'frontend', 'dist')
+        target_path = os.path.join(dist_dir, clean_path.lstrip('/'))
+        
+        # For base route or missing files (SPA routing), fallback to index.html
+        if clean_path == '/' or not os.path.exists(target_path) or os.path.isdir(target_path):
+            return os.path.join(dist_dir, 'index.html')
+            
+        return target_path
+
     def do_PUT(self):
         self.handle_write()
 
