@@ -1,5 +1,5 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h> // Built-in: Handles both local and secure AWS HTTP requests
+#include <ESP8266HTTPClient.h> // Built-in: Handles both KVDB cloud and secure AWS HTTP requests
 #include <WiFiClientSecure.h>  // Built-in: Handles secure SSL handshake
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -16,14 +16,8 @@ const char* password = "12345678";
 const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
-// ==========================================
-// IMPORTANT: YOU MUST CHANGE THIS IP ADDRESS TO YOUR PC's IP!
-// Open your PC's command prompt, type 'ipconfig', and copy the Wi-Fi IPv4 Address here.
-// If your PC's IP is not correct, the local dashboard upload will print "-1".
-// ==========================================
-const String local_server_ip = "10.39.143.252"; 
-const int local_server_port = 3000;
-const int UNIT_ID = 1;
+// Free Cloud KVDB.io configuration (Does NOT require any PC server or signup!)
+const String cloud_kvdb_url = "https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_1";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
@@ -122,11 +116,11 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 DHT11 dht11(DHTPIN);
 
 // WiFi Clients
-WiFiClientSecure wifiSecureClient; // Handles SSL logic for AWS IoT Core
-WiFiClient localClient;             // Handles local unencrypted HTTP requests
+WiFiClientSecure wifiSecureClient;   // Handles secure SSL handshake for AWS IoT Core
+WiFiClientSecure wifiClientInsecure; // Handles SSL logic for KVDB.io cloud storage
 time_t nowTime;
 
-// BearSSL Certificate Wrapper Objects
+// BearSSL Certificate Wrapper Objects for AWS
 BearSSL::X509List caCert(AWS_CERT_CA);
 BearSSL::X509List clientCert(AWS_CERT_CRT);
 BearSSL::PrivateKey clientKey(AWS_CERT_PRIVATE);
@@ -271,13 +265,16 @@ void setup() {
 
   connectToWiFi();
 
+  // Set insecure mode for KVDB.io cloud uploads to bypass CA certificate check (saves RAM!)
+  wifiClientInsecure.setInsecure();
+
   if (WiFi.status() == WL_CONNECTED) {
     syncTime();
   }
 }
 
 void loop() {
-  // 1. Read Sensors (Happens exactly once every 5 seconds because of delay(5000) at the end)
+  // 1. Read Sensors (Happens exactly once every 5 seconds)
   float temperature = dht11.readTemperature();
   float humidity = dht11.readHumidity();
   float distance = getDistance();
@@ -334,13 +331,13 @@ void loop() {
   Serial.print("Alerts      : "); Serial.println(alertStr);
 
   // ==========================================
-  // A. UPLOAD TO LOCAL DASHBOARD (HTTP port 3000)
+  // A. UPLOAD TO CLOUD TELEMETRY STORAGE (KVDB.io - Direct Internet Upload)
   // ==========================================
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
-    String uploadUrl = "http://" + local_server_ip + ":" + String(local_server_port) + "/api/telemetry/" + String(UNIT_ID);
     
-    http.begin(localClient, uploadUrl);
+    // We send to the secure cloud endpoint directly! No local server needed on PC!
+    http.begin(wifiClientInsecure, cloud_kvdb_url);
     http.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
@@ -359,11 +356,11 @@ void loop() {
     jsonPayload += "}";
 
     Serial.print("Uploading to Dashboard... ");
-    int httpResponseCode = http.PUT(jsonPayload); 
-    Serial.println(httpResponseCode); // Prints 200 on success!
+    int httpResponseCode = http.POST(jsonPayload); 
+    Serial.println(httpResponseCode); // Prints 200/201 on success!
     http.end();
   } else {
-    Serial.println("Local upload skipped (WiFi disconnected).");
+    Serial.println("Dashboard upload skipped (WiFi disconnected).");
   }
 
   // ==========================================

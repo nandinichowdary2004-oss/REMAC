@@ -205,9 +205,20 @@ export default function App() {
           if (res.ok) {
             livePayload = await res.json();
             setIsSimulatorActive(true);
+          } else {
+            throw new Error("Local API returned error status");
           }
         } catch (e) {
-          console.warn("Express server fetch failed:", e);
+          // Fallback to KVDB.io cloud storage directly in browser (works without local python server!)
+          try {
+            const res = await fetch(`https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/latest_${unit.id}`);
+            if (res.ok) {
+              livePayload = await res.json();
+              setIsSimulatorActive(true);
+            }
+          } catch (cloudErr) {
+            console.warn("Cloud KVDB fetch failed:", cloudErr);
+          }
         }
 
         // Only fall back to dummy mock data if simulation is enabled
