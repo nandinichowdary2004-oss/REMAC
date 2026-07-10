@@ -26,7 +26,7 @@ const int UNIT_ID = 1;
 // ==========================================
 
 // Amazon Root CA 1
-const char AWS_CERT_CA[] PROGMEM = R"EOF(
+const char* AWS_CERT_CA = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIDQTCCAimgAwIBAgITBmyfz5m/jAo54vB4ikPmljZbyjANBgkqhkiG9w0BAQsF
 ADA5MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRkwFwYDVQQDExBBbWF6
@@ -50,7 +50,7 @@ rqXRfboQnoZsG4q5WTP468SQvvG5
 )EOF";
 
 // Client Certificate
-const char AWS_CERT_CRT[] PROGMEM = R"EOF(
+const char* AWS_CERT_CRT = R"EOF(
 -----BEGIN CERTIFICATE-----
 MIIDWTCCAkGgAwIBAgIUUAyAqjAsJp1rfWjO270c3bQ7NewwDQYJKoZIhvcNAQEL
 BQAwTTFLMEkGA1UECwxCQW1hem9uIFdlYiBTZXJ2aWNlcyBPPUFtYXpvbi5jb20g
@@ -74,7 +74,7 @@ cLsVPEyq64SbMRzmUHN75R3VhlLoLqdbqv2YaHcxrOcGCKCRFjP9lk216PBnmMMb
 )EOF";
 
 // Private Key
-const char AWS_CERT_PRIVATE[] PROGMEM = R"EOF(
+const char* AWS_CERT_PRIVATE = R"EOF(
 -----BEGIN RSA PRIVATE KEY-----
 MIIEpAIBAAKCAQEA2fdAo6cFjlUaWpV6orUGsUDzHbZO28e2boaxhSjXWk8L9xrn
 chA4chfV8x8HATYLoPeRd2g48A29qYX+VWVX1OdHaGesf+fZecUi/79YrpqPMyni
