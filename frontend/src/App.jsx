@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 // STORAGE UNITS CONFIGURATION
 // ============================================================
 const STORAGE_UNITS = [
-  { id: 1, name: "Storage Unit 1", material: "PET (Polyethylene Terephthalate)", device_id: "REMAC_PET_001", default_temp: 35.0, default_humid: 40.0, blob_id: "019f46e1-3345-7a4a-bea7-c6601ddabfea" },
+  { id: 1, name: "Storage Unit 1", material: "PET (Polyethylene Terephthalate)", device_id: "REMAC_PET_001", default_temp: 35.0, default_humid: 40.0, blob_id: "019f4ab1-f7e9-7797-aad7-e56a4a77fc86" },
   { id: 2, name: "Storage Unit 2", material: "HDPE (High-Density Polyethylene)", device_id: "REMAC_HDPE_002", default_temp: 40.0, default_humid: 65.0, blob_id: "019f46e1-3f47-7346-aae4-48e0de4bd33b" },
   { id: 3, name: "Storage Unit 3", material: "PVC (Polyvinyl Chloride)", device_id: "REMAC_PVC_003", default_temp: 30.0, default_humid: 50.0, blob_id: "019f46e1-4885-7bd6-a8cd-3c2866eb0398" },
   { id: 4, name: "Storage Unit 4", material: "LDPE (Low-Density Polyethylene)", device_id: "REMAC_LDPE_004", default_temp: 35.0, default_humid: 65.0, blob_id: "019f46e1-51de-7094-b331-1e2978b9c38a" },
@@ -209,15 +209,17 @@ export default function App() {
             throw new Error("Local API returned error status");
           }
         } catch (e) {
-          // Fallback to JSONBlob cloud storage directly in browser (works without local python server!)
-          try {
-            const res = await fetch(`https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86`);
-            if (res.ok) {
-              livePayload = await res.json();
-              setIsSimulatorActive(true);
+          // Fallback to JSONBlob cloud storage directly in browser (only for Unit 1 physical hardware!)
+          if (unit.id === 1) {
+            try {
+              const res = await fetch(`https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86`);
+              if (res.ok) {
+                livePayload = await res.json();
+                setIsSimulatorActive(true);
+              }
+            } catch (cloudErr) {
+              console.warn("Cloud JSONBlob fetch failed:", cloudErr);
             }
-          } catch (cloudErr) {
-            console.warn("Cloud JSONBlob fetch failed:", cloudErr);
           }
         }
 
