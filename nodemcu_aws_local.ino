@@ -21,7 +21,7 @@ const char* aws_topic = "remac/node1/data";
 // Open your PC's command prompt, type 'ipconfig', and copy the Wi-Fi IPv4 Address here.
 // If your PC's IP is not correct, the local dashboard upload will print "-1".
 // ==========================================
-const String local_server_ip = "192.168.43.150"; 
+const String local_server_ip = "10.39.143.252"; 
 const int local_server_port = 3000;
 const int UNIT_ID = 1;
 
