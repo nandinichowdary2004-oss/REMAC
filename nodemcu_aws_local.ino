@@ -17,7 +17,7 @@ const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
 // Free Cloud KVDB.io configuration (Does NOT require any PC server or signup!)
-const String cloud_kvdb_url = "https://kvdb.io/remac_live_v1_9a8b7c/latest_1";
+const String cloud_jsonblob_url = "https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
@@ -331,13 +331,13 @@ void loop() {
   Serial.print("Alerts      : "); Serial.println(alertStr);
 
   // ==========================================
-  // A. UPLOAD TO CLOUD TELEMETRY STORAGE (KVDB.io - Direct Internet Upload)
+  // A. UPLOAD TO CLOUD TELEMETRY STORAGE (JSONBlob - Direct Internet Upload)
   // ==========================================
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     
     // We send to the secure cloud endpoint directly! No local server needed on PC!
-    http.begin(wifiClientInsecure, cloud_kvdb_url);
+    http.begin(wifiClientInsecure, cloud_jsonblob_url);
     http.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
@@ -356,8 +356,8 @@ void loop() {
     jsonPayload += "}";
 
     Serial.print("Uploading to Dashboard... ");
-    int httpResponseCode = http.POST(jsonPayload); 
-    Serial.println(httpResponseCode); // Prints 200/201 on success!
+    int httpResponseCode = http.PUT(jsonPayload); // PUT updates our static JSONBlob
+    Serial.println(httpResponseCode); // Prints 200 on success!
     http.end();
   } else {
     Serial.println("Dashboard upload skipped (WiFi disconnected).");

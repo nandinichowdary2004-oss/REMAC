@@ -209,15 +209,15 @@ export default function App() {
             throw new Error("Local API returned error status");
           }
         } catch (e) {
-          // Fallback to KVDB.io cloud storage directly in browser (works without local python server!)
+          // Fallback to JSONBlob cloud storage directly in browser (works without local python server!)
           try {
-            const res = await fetch(`https://kvdb.io/remac_live_v1_9a8b7c/latest_${unit.id}`);
+            const res = await fetch(`https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86`);
             if (res.ok) {
               livePayload = await res.json();
               setIsSimulatorActive(true);
             }
           } catch (cloudErr) {
-            console.warn("Cloud KVDB fetch failed:", cloudErr);
+            console.warn("Cloud JSONBlob fetch failed:", cloudErr);
           }
         }
 
