@@ -40,6 +40,7 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(() => {
     return localStorage.getItem('remac_sim_running') === 'true';
   });
+  const [diagStatus, setDiagStatus] = useState({ local: 'Checking...', cloud: 'Checking...', error: '' });
 
   // Toggle Remote and Local Simulation
   const toggleSimulation = async () => {
@@ -205,10 +206,12 @@ export default function App() {
           if (res.ok) {
             livePayload = await res.json();
             setIsSimulatorActive(true);
+            setDiagStatus(prev => ({ ...prev, local: 'Connected' }));
           } else {
             throw new Error("Local API returned error status");
           }
         } catch (e) {
+          setDiagStatus(prev => ({ ...prev, local: 'Offline' }));
           // Fallback to JSONBlob cloud storage directly in browser (only for Unit 1 physical hardware!)
           if (unit.id === 1) {
             try {
@@ -216,9 +219,13 @@ export default function App() {
               if (res.ok) {
                 livePayload = await res.json();
                 setIsSimulatorActive(true);
+                setDiagStatus(prev => ({ ...prev, cloud: 'Connected', error: '' }));
+              } else {
+                throw new Error(`HTTP ${res.status}`);
               }
             } catch (cloudErr) {
               console.warn("Cloud JSONBlob fetch failed:", cloudErr);
+              setDiagStatus(prev => ({ ...prev, cloud: 'Failed', error: cloudErr.message }));
             }
           }
         }
@@ -395,6 +402,22 @@ export default function App() {
           <p>Industrial IoT • Cloud Monitor System Hub</p>
         </div>
         <div className="header-actions">
+          <div className="diag-badge" style={{
+            fontSize: '11px', 
+            background: 'rgba(255,255,255,0.05)', 
+            padding: '4px 10px', 
+            borderRadius: '6px', 
+            border: '1px solid rgba(255,255,255,0.1)',
+            display: 'flex',
+            gap: '8px',
+            color: '#a0aec0',
+            alignItems: 'center',
+            marginRight: '12px'
+          }}>
+            <span>💻 Local: <strong style={{color: diagStatus.local === 'Connected' ? '#48bb78' : '#e53e3e'}}>{diagStatus.local}</strong></span>
+            <span>☁️ Cloud: <strong style={{color: diagStatus.cloud === 'Connected' ? '#48bb78' : '#e53e3e'}}>{diagStatus.cloud}</strong></span>
+            {diagStatus.error && <span style={{color: '#feb2b2', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>({diagStatus.error})</span>}
+          </div>
           <div className="sim-indicator">
             <span className={`sim-dot ${!isSimulating ? 'active' : ''}`}></span>
             <span>{isSimulating ? "🧪 Simulation Mode (Demo)" : "🔌 Live Hardware Mode"}</span>
