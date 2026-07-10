@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h>
-#include <WiFiClientSecure.h> // Handles secure TLS connection to AWS IoT Core
-#include <PubSubClient.h>     // MQTT Client for publishing to AWS
+#include <ESP8266HTTPClient.h> // Built-in: Handles both unencrypted local and secure AWS HTTP requests
+#include <WiFiClientSecure.h>  // Built-in: Handles secure SSL handshake
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 #include <DHT11.h>
@@ -13,11 +12,9 @@
 const char* ssid = "REMAC";
 const char* password = "12345678";
 
-// AWS IoT Core Settings
+// AWS IoT Core HTTPS REST Settings (No MQTT library required!)
 const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
-const int aws_port = 8883;
 const char* aws_topic = "remac/node1/data";
-const char* client_id = "Remac-Node-1";
 
 // Local Dashboard Settings (Update this to your PC's IP address!)
 const String local_server_ip = "192.168.43.150"; // <-- Change to your PC's IP from ipconfig
@@ -117,13 +114,13 @@ Ib+Zf3ytG80g1jsnPMsR1rirHV5R109o+fQLpErN8mw20jeXbsRw+Q==
 #define BLUE_LED D4
 #define TANK_HEIGHT 30.0
 
-LiquidCrystal_I2C lcd(0x27, 16, 2); // Initialized with default address 0x27
+LiquidCrystal_I2C lcd(0x27, 16, 2); 
 DHT11 dht11(DHTPIN);
 
 // WiFi Clients
-WiFiClientSecure wifiSecureClient; // Secure connection for AWS Core
-WiFiClient localClient;             // Plain HTTP connection for local dashboard (very lightweight!)
-PubSubClient mqttClient(wifiSecureClient);
+WiFiClientSecure wifiSecureClient; // Handles SSL logic for AWS IoT Core
+WiFiClient localClient;             // Handles local unencrypted HTTP requests
+time_t nowTime;
 
 // Thresholds & Status variables
 String material = "PLA";
@@ -155,7 +152,6 @@ const unsigned long WIFI_CHECK_INTERVAL = 10000;
 // 4. FUNCTION DEFINITIONS
 // ==========================================
 
-// Connect to WiFi network
 void connectToWiFi() {
   Serial.print("Connecting to WiFi: ");
   Serial.println(ssid);
@@ -176,7 +172,7 @@ void connectToWiFi() {
     lcd.setCursor(counter % 16, 1);
     lcd.print(".");
     counter++;
-    if (counter > 30) { // Timeout after 15 seconds
+    if (counter > 30) { 
       Serial.println("\nWiFi timeout! Operating offline.");
       lcd.clear();
       lcd.print("WiFi Offline");
@@ -191,21 +187,19 @@ void connectToWiFi() {
   delay(1000);
 }
 
-// Synchronize local time via SNTP (Required for AWS TLS Certificate Validation)
 void syncTime() {
   Serial.print("Setting time using SNTP (for AWS SSL certificates)... ");
   lcd.clear();
   lcd.print("Syncing Time...");
   
-  // Set timezone to UTC
   configTime(0, 0, "pool.ntp.org", "time.nist.gov");
-  time_t now = time(nullptr);
+  nowTime = time(nullptr);
   
   int timeout = 0;
-  while (now < 8 * 3600 * 2) {
+  while (nowTime < 8 * 3600 * 2) {
     delay(500);
     Serial.print(".");
-    now = time(nullptr);
+    nowTime = time(nullptr);
     timeout++;
     if (timeout > 30) {
       Serial.println("\nFailed to sync time! AWS Core connection might fail.");
@@ -222,33 +216,6 @@ void syncTime() {
   delay(1000);
 }
 
-// Connect to AWS IoT Core MQTT Broker
-void connectToAWS() {
-  if (!wifiSecureClient.loadCACert(AWS_CERT_CA)) {
-    Serial.println("Error loading AWS Root CA!");
-  }
-  if (!wifiSecureClient.loadCertificate(AWS_CERT_CRT)) {
-    Serial.println("Error loading AWS Client Cert!");
-  }
-  if (!wifiSecureClient.loadPrivateKey(AWS_CERT_PRIVATE)) {
-    Serial.println("Error loading AWS Private Key!");
-  }
-  
-  // BearSSL optimization: set custom buffer sizes to reduce RAM usage on ESP8266!
-  wifiSecureClient.setBufferSizes(2048, 1024);
-  
-  mqttClient.setServer(aws_endpoint, aws_port);
-  
-  Serial.print("Connecting to AWS IoT Core... ");
-  if (mqttClient.connect(client_id)) {
-    Serial.println("Connected!");
-  } else {
-    Serial.print("Failed, rc=");
-    Serial.println(mqttClient.state());
-  }
-}
-
-// Read Distance from HC-SR04 sensor
 float getDistance() {
   digitalWrite(TRIG, LOW);
   delayMicroseconds(2);
@@ -256,25 +223,21 @@ float getDistance() {
   delayMicroseconds(10);
   digitalWrite(TRIG, LOW);
 
-  long duration = pulseIn(ECHO, HIGH, 50000); // 50ms timeout
+  long duration = pulseIn(ECHO, HIGH, 50000); 
   if (duration == 0) return -1.0;
   return duration * 0.0343 / 2.0;
 }
 
-// Update the LCD display based on selected page
 void updateLCD(int page) {
   lcd.clear();
   
-  // Safety checks in case LCD init failed
   if (page == 0) {
-    // Page 0: Readings Page
     lcd.setCursor(0, 0);
     lcd.print("T:"); lcd.print(currentTemp, 1); lcd.print("C  H:"); lcd.print(currentHum, 0); lcd.print("%");
     lcd.setCursor(0, 1);
     lcd.print("Lvl:"); lcd.print(currentLevel, 1); lcd.print("% ("); lcd.print(material); lcd.print(")");
   } 
   else if (page == 1) {
-    // Page 1: System Health Status
     lcd.setCursor(0, 0);
     lcd.print("SYSTEM STATUS:");
     lcd.setCursor(0, 1);
@@ -285,7 +248,6 @@ void updateLCD(int page) {
     }
   } 
   else if (page == 2) {
-    // Page 2: Alerts detail page
     lcd.setCursor(0, 0);
     lcd.print("ACTIVE WARNINGS:");
     lcd.setCursor(0, 1);
@@ -307,7 +269,6 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // Setup Sensor Pins
   pinMode(TRIG, OUTPUT);
   pinMode(ECHO, INPUT);
   pinMode(GREEN_LED, OUTPUT);
@@ -316,10 +277,8 @@ void setup() {
   digitalWrite(GREEN_LED, LOW);
   digitalWrite(BLUE_LED, LOW);
 
-  // Initialize I2C and LCD
-  Wire.begin(D2, D1); // SDA = D2, SCL = D1
+  Wire.begin(D2, D1); 
   
-  // Try LCD initialization
   lcd.begin(16, 2);
   lcd.init();
   lcd.backlight();
@@ -329,16 +288,13 @@ void setup() {
   lcd.print("Booting up...");
   delay(1500);
 
-  // Connect to WiFi
   connectToWiFi();
 
-  // If connected, sync time and prepare AWS connection
   if (WiFi.status() == WL_CONNECTED) {
     syncTime();
-    connectToAWS();
   }
 
-  // Pre-load sensors so the LCD doesn't show 0 at boot
+  // Pre-load initial sensor state
   float temperature = dht11.readTemperature();
   float humidity = dht11.readHumidity();
   float distance = getDistance();
@@ -351,27 +307,12 @@ void setup() {
     if (currentLevel > 100) currentLevel = 100.0;
   }
   
-  // Draw initial page
   updateLCD(0);
 }
 
 void loop() {
   unsigned long currentMillis = millis();
 
-  // Keep AWS MQTT connection alive
-  if (WiFi.status() == WL_CONNECTED) {
-    if (!mqttClient.connected()) {
-      Serial.print("AWS connection lost. Reconnecting... ");
-      if (mqttClient.connect(client_id)) {
-        Serial.println("Connected!");
-      } else {
-        Serial.println("Failed to reconnect.");
-      }
-    }
-    mqttClient.loop();
-  }
-
-  // 1. Maintain WiFi Connection in background
   if (currentMillis - lastWiFiCheckTime >= WIFI_CHECK_INTERVAL) {
     lastWiFiCheckTime = currentMillis;
     if (WiFi.status() != WL_CONNECTED) {
@@ -380,7 +321,6 @@ void loop() {
     }
   }
 
-  // 2. Read Sensors, Upload data, and Print to Serial every 5 seconds
   if (currentMillis - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
     lastSensorReadTime = currentMillis;
 
@@ -389,34 +329,30 @@ void loop() {
     float distance = getDistance();
     float level = 0.0;
 
-    // Safety checks
-    if (isnan(temperature)) temperature = currentTemp; // Use cached if failed
+    if (isnan(temperature)) temperature = currentTemp; 
     if (isnan(humidity)) humidity = currentHum;
 
     if (distance < 0) {
-      level = currentLevel; // Use cached if failed
+      level = currentLevel; 
     } else {
       level = ((TANK_HEIGHT - distance) / TANK_HEIGHT) * 100.0;
       if (level > 100) level = 100.0;
       if (level < 0) level = 0.0;
     }
 
-    // Set Alert flags
     isTempAlert = temperature > TEMP_LIMIT;
     isHumAlert = humidity > HUM_LIMIT;
     isLevelAlert = level < LEVEL_LIMIT;
     hasCurrentAlert = isTempAlert || isHumAlert || isLevelAlert;
 
-    // LED Control
     if (hasCurrentAlert) {
       digitalWrite(GREEN_LED, LOW);
-      digitalWrite(BLUE_LED, HIGH); // Blue LED means Alert active
+      digitalWrite(BLUE_LED, HIGH); 
     } else {
-      digitalWrite(GREEN_LED, HIGH); // Green LED means Safe
+      digitalWrite(GREEN_LED, HIGH); 
       digitalWrite(BLUE_LED, LOW);
     }
 
-    // Warnings description
     String statusStr = hasCurrentAlert ? "DANGER" : "SAFE";
     String alertStr = "None";
     if (isTempAlert && isHumAlert && isLevelAlert) alertStr = "High Temp + High Humid + Low Material";
@@ -427,12 +363,10 @@ void loop() {
     else if (isHumAlert) alertStr = "High Humidity";
     else if (isLevelAlert) alertStr = "Low Material Level";
 
-    // Cache values globally for LCD renderer
     currentTemp = temperature;
     currentHum = humidity;
     currentLevel = level;
 
-    // Print to Serial Monitor
     Serial.println("==========================================");
     Serial.print("Temperature : "); Serial.print(temperature); Serial.println(" C");
     Serial.print("Humidity    : "); Serial.print(humidity); Serial.println(" %");
@@ -446,7 +380,6 @@ void loop() {
       HTTPClient http;
       String uploadUrl = "http://" + local_server_ip + ":" + String(local_server_port) + "/api/telemetry/" + String(UNIT_ID);
       
-      // Initialize connection using standard unencrypted HTTP client
       http.begin(localClient, uploadUrl);
       http.addHeader("Content-Type", "application/json");
 
@@ -466,17 +399,31 @@ void loop() {
       jsonPayload += "}";
 
       Serial.print("Uploading to Dashboard... ");
-      int httpResponseCode = http.PUT(jsonPayload); // PUT request updates our local dashboard server
-      Serial.println(httpResponseCode);             // Will print 200 when successful!
+      int httpResponseCode = http.PUT(jsonPayload); 
+      Serial.println(httpResponseCode);             // Will print 200 on success!
       http.end();
     } else {
       Serial.println("Local upload skipped (WiFi not connected).");
     }
 
     // ==========================================
-    // B. UPLOAD TO AWS IOT CORE (MQTT port 8883)
+    // B. UPLOAD TO AWS IOT CORE (HTTPS POST port 8443)
     // ==========================================
-    if (WiFi.status() == WL_CONNECTED && mqttClient.connected()) {
+    if (WiFi.status() == WL_CONNECTED) {
+      HTTPClient http;
+      
+      // Load actual AWS certs into BearSSL secure client
+      wifiSecureClient.setBufferSizes(2048, 1024); // Handshake memory optimization for ESP8266
+      wifiSecureClient.setCACert(AWS_CERT_CA);
+      wifiSecureClient.setCertificate(AWS_CERT_CRT);
+      wifiSecureClient.setPrivateKey(AWS_CERT_PRIVATE);
+      
+      // Target the AWS IoT Core HTTPS REST publish endpoint
+      String awsUrl = "https://" + String(aws_endpoint) + ":8443/topics/" + String(aws_topic) + "?qos=1";
+      
+      http.begin(wifiSecureClient, awsUrl);
+      http.addHeader("Content-Type", "application/json");
+
       String awsPayload = "{";
       awsPayload += "\"device_id\":\"REMAC_PET_001\",";
       awsPayload += "\"temperature\":" + String(temperature, 1) + ",";
@@ -488,17 +435,20 @@ void loop() {
       awsPayload += "}";
 
       Serial.print("Publishing to AWS IoT Core... ");
-      if (mqttClient.publish(aws_topic, awsPayload.c_str())) {
-        Serial.println("OK");
+      int awsResponseCode = http.POST(awsPayload);
+      if (awsResponseCode > 0) {
+        Serial.println(awsResponseCode); // Should be 200/202 on success!
       } else {
-        Serial.println("Failed");
+        Serial.print("Failed: ");
+        Serial.println(http.errorToString(awsResponseCode).c_str());
       }
+      http.end();
     } else {
-      Serial.println("AWS upload skipped (offline or not connected).");
+      Serial.println("AWS upload skipped (offline).");
     }
   }
 
-  // 3. Cycle LCD screen pages every 3 seconds (non-blocking)
+  // Cycle LCD pages
   if (currentMillis - lastLCDCycleTime >= LCD_CYCLE_INTERVAL) {
     lastLCDCycleTime = currentMillis;
     lcdPage = (lcdPage + 1) % 3;
