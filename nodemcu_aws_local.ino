@@ -1,5 +1,5 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266HTTPClient.h> // Built-in: Handles both unencrypted local and secure AWS HTTP requests
+#include <ESP8266HTTPClient.h> // Built-in: Handles both local and secure AWS HTTP requests
 #include <WiFiClientSecure.h>  // Built-in: Handles secure SSL handshake
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -16,8 +16,12 @@ const char* password = "12345678";
 const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
-// Local Dashboard Settings (Update this to your PC's IP address!)
-const String local_server_ip = "192.168.43.150"; // <-- Change to your PC's IP from ipconfig
+// ==========================================
+// IMPORTANT: YOU MUST CHANGE THIS IP ADDRESS TO YOUR PC's IP!
+// Open your PC's command prompt, type 'ipconfig', and copy the Wi-Fi IPv4 Address here.
+// If your PC's IP is not correct, the local dashboard upload will print "-1".
+// ==========================================
+const String local_server_ip = "192.168.43.150"; 
 const int local_server_port = 3000;
 const int UNIT_ID = 1;
 
@@ -122,7 +126,7 @@ WiFiClientSecure wifiSecureClient; // Handles SSL logic for AWS IoT Core
 WiFiClient localClient;             // Handles local unencrypted HTTP requests
 time_t nowTime;
 
-// BearSSL Certificate Objects for AWS IoT Core
+// BearSSL Certificate Wrapper Objects
 BearSSL::X509List caCert(AWS_CERT_CA);
 BearSSL::X509List clientCert(AWS_CERT_CRT);
 BearSSL::PrivateKey clientKey(AWS_CERT_PRIVATE);
@@ -141,17 +145,6 @@ bool hasCurrentAlert = false;
 bool isTempAlert = false;
 bool isHumAlert = false;
 bool isLevelAlert = false;
-
-// Timing intervals (non-blocking)
-unsigned long lastSensorReadTime = 0;
-const unsigned long SENSOR_READ_INTERVAL = 5000; // Read sensors and publish every 5 seconds
-
-unsigned long lastLCDCycleTime = 0;
-const unsigned long LCD_CYCLE_INTERVAL = 3000;   // Cycle LCD pages every 3 seconds
-int lcdPage = 0;
-
-unsigned long lastWiFiCheckTime = 0;
-const unsigned long WIFI_CHECK_INTERVAL = 10000;
 
 // ==========================================
 // 4. FUNCTION DEFINITIONS
@@ -228,42 +221,25 @@ float getDistance() {
   delayMicroseconds(10);
   digitalWrite(TRIG, LOW);
 
-  long duration = pulseIn(ECHO, HIGH, 50000); 
+  long duration = pulseIn(ECHO, HIGH, 30000); 
   if (duration == 0) return -1.0;
   return duration * 0.0343 / 2.0;
 }
 
-void updateLCD(int page) {
+void updateLCD() {
   lcd.clear();
+  // Display Live Readings on top line, status & alert warning on bottom line
+  lcd.setCursor(0, 0);
+  lcd.print("T:"); lcd.print(currentTemp, 1); lcd.print("C H:"); lcd.print(currentHum, 0); lcd.print("%");
   
-  if (page == 0) {
-    lcd.setCursor(0, 0);
-    lcd.print("T:"); lcd.print(currentTemp, 1); lcd.print("C  H:"); lcd.print(currentHum, 0); lcd.print("%");
-    lcd.setCursor(0, 1);
-    lcd.print("Lvl:"); lcd.print(currentLevel, 1); lcd.print("% ("); lcd.print(material); lcd.print(")");
-  } 
-  else if (page == 1) {
-    lcd.setCursor(0, 0);
-    lcd.print("SYSTEM STATUS:");
-    lcd.setCursor(0, 1);
-    if (hasCurrentAlert) {
-      lcd.print("⚠️ ALERT ACTIVE");
-    } else {
-      lcd.print("✅ SAFE & STABLE");
-    }
-  } 
-  else if (page == 2) {
-    lcd.setCursor(0, 0);
-    lcd.print("ACTIVE WARNINGS:");
-    lcd.setCursor(0, 1);
-    if (!isTempAlert && !isHumAlert && !isLevelAlert) {
-      lcd.print("None - Safe");
-    } else {
-      if (isTempAlert) lcd.print("T ");
-      if (isHumAlert) lcd.print("H ");
-      if (isLevelAlert) lcd.print("L ");
-      lcd.print("Warning!");
-    }
+  lcd.setCursor(0, 1);
+  if (hasCurrentAlert) {
+    lcd.print("⚠️ ");
+    if (isTempAlert) lcd.print("Temp!");
+    else if (isHumAlert) lcd.print("Humid!");
+    else if (isLevelAlert) lcd.print("LowLvl!");
+  } else {
+    lcd.print("Lvl:"); lcd.print(currentLevel, 0); lcd.print("% PLA SAFE");
   }
 }
 
@@ -282,7 +258,7 @@ void setup() {
   digitalWrite(GREEN_LED, LOW);
   digitalWrite(BLUE_LED, LOW);
 
-  Wire.begin(D2, D1); 
+  Wire.begin(D2, D1); // SDA = D2, SCL = D1
   
   lcd.begin(16, 2);
   lcd.init();
@@ -298,164 +274,138 @@ void setup() {
   if (WiFi.status() == WL_CONNECTED) {
     syncTime();
   }
-
-  // Pre-load initial sensor state
-  float temperature = dht11.readTemperature();
-  float humidity = dht11.readHumidity();
-  float distance = getDistance();
-  
-  if (!isnan(temperature)) currentTemp = temperature;
-  if (!isnan(humidity)) currentHum = humidity;
-  if (distance >= 0) {
-    currentLevel = ((TANK_HEIGHT - distance) / TANK_HEIGHT) * 100.0;
-    if (currentLevel < 0) currentLevel = 0.0;
-    if (currentLevel > 100) currentLevel = 100.0;
-  }
-  
-  updateLCD(0);
 }
 
 void loop() {
-  unsigned long currentMillis = millis();
+  // 1. Read Sensors (Happens exactly once every 5 seconds because of delay(5000) at the end)
+  float temperature = dht11.readTemperature();
+  float humidity = dht11.readHumidity();
+  float distance = getDistance();
+  float level = 0.0;
 
-  if (currentMillis - lastWiFiCheckTime >= WIFI_CHECK_INTERVAL) {
-    lastWiFiCheckTime = currentMillis;
-    if (WiFi.status() != WL_CONNECTED) {
-      Serial.println("WiFi disconnected! Attempting reconnect...");
-      WiFi.begin(ssid, password);
-    }
+  if (isnan(temperature)) temperature = currentTemp; 
+  if (isnan(humidity)) humidity = currentHum;
+
+  if (distance < 0) {
+    level = currentLevel; 
+  } else {
+    level = ((TANK_HEIGHT - distance) / TANK_HEIGHT) * 100.0;
+    if (level > 100) level = 100.0;
+    if (level < 0) level = 0.0;
   }
 
-  if (currentMillis - lastSensorReadTime >= SENSOR_READ_INTERVAL) {
-    lastSensorReadTime = currentMillis;
+  // Set alert statuses
+  isTempAlert = temperature > TEMP_LIMIT;
+  isHumAlert = humidity > HUM_LIMIT;
+  isLevelAlert = level < LEVEL_LIMIT;
+  hasCurrentAlert = isTempAlert || isHumAlert || isLevelAlert;
 
-    float temperature = dht11.readTemperature();
-    float humidity = dht11.readHumidity();
-    float distance = getDistance();
-    float level = 0.0;
-
-    if (isnan(temperature)) temperature = currentTemp; 
-    if (isnan(humidity)) humidity = currentHum;
-
-    if (distance < 0) {
-      level = currentLevel; 
-    } else {
-      level = ((TANK_HEIGHT - distance) / TANK_HEIGHT) * 100.0;
-      if (level > 100) level = 100.0;
-      if (level < 0) level = 0.0;
-    }
-
-    isTempAlert = temperature > TEMP_LIMIT;
-    isHumAlert = humidity > HUM_LIMIT;
-    isLevelAlert = level < LEVEL_LIMIT;
-    hasCurrentAlert = isTempAlert || isHumAlert || isLevelAlert;
-
-    if (hasCurrentAlert) {
-      digitalWrite(GREEN_LED, LOW);
-      digitalWrite(BLUE_LED, HIGH); 
-    } else {
-      digitalWrite(GREEN_LED, HIGH); 
-      digitalWrite(BLUE_LED, LOW);
-    }
-
-    String statusStr = hasCurrentAlert ? "DANGER" : "SAFE";
-    String alertStr = "None";
-    if (isTempAlert && isHumAlert && isLevelAlert) alertStr = "High Temp + High Humid + Low Material";
-    else if (isTempAlert && isHumAlert) alertStr = "High Temperature + High Humidity";
-    else if (isTempAlert && isLevelAlert) alertStr = "High Temperature + Low Material";
-    else if (isHumAlert && isLevelAlert) alertStr = "High Humidity + Low Material";
-    else if (isTempAlert) alertStr = "High Temperature";
-    else if (isHumAlert) alertStr = "High Humidity";
-    else if (isLevelAlert) alertStr = "Low Material Level";
-
-    currentTemp = temperature;
-    currentHum = humidity;
-    currentLevel = level;
-
-    Serial.println("==========================================");
-    Serial.print("Temperature : "); Serial.print(temperature); Serial.println(" C");
-    Serial.print("Humidity    : "); Serial.print(humidity); Serial.println(" %");
-    Serial.print("Level       : "); Serial.print(level); Serial.println(" %");
-    Serial.print("Alerts      : "); Serial.println(alertStr);
-
-    // ==========================================
-    // A. UPLOAD TO LOCAL DASHBOARD (HTTP port 3000)
-    // ==========================================
-    if (WiFi.status() == WL_CONNECTED) {
-      HTTPClient http;
-      String uploadUrl = "http://" + local_server_ip + ":" + String(local_server_port) + "/api/telemetry/" + String(UNIT_ID);
-      
-      http.begin(localClient, uploadUrl);
-      http.addHeader("Content-Type", "application/json");
-
-      String jsonPayload = "{";
-      jsonPayload += "\"device\":\"REMAC_PET_001\",";
-      jsonPayload += "\"timestamp\":\"" + String(millis() / 1000) + "s\",";
-      jsonPayload += "\"temperature\":" + String(temperature, 1) + ",";
-      jsonPayload += "\"humidity\":" + String(humidity, 1) + ",";
-      jsonPayload += "\"distance\":" + String(distance, 1) + ",";
-      jsonPayload += "\"material_level\":" + String(level, 1) + ",";
-      jsonPayload += "\"status\":\"" + statusStr + "\",";
-      jsonPayload += "\"active_alert\":\"" + alertStr + "\",";
-      jsonPayload += "\"random_forest\":\"" + statusStr + "\",";
-      jsonPayload += "\"isolation_forest\":\"" + String(hasCurrentAlert ? "ANOMALY" : "NORMAL") + "\",";
-      jsonPayload += "\"temperature_risk\":" + String((temperature / 40.0) * 100, 1) + ",";
-      jsonPayload += "\"humidity_risk\":" + String((humidity / 60.0) * 100, 1);
-      jsonPayload += "}";
-
-      Serial.print("Uploading to Dashboard... ");
-      int httpResponseCode = http.PUT(jsonPayload); 
-      Serial.println(httpResponseCode);             // Will print 200 on success!
-      http.end();
-    } else {
-      Serial.println("Local upload skipped (WiFi not connected).");
-    }
-
-    // ==========================================
-    // B. UPLOAD TO AWS IOT CORE (HTTPS POST port 8443)
-    // ==========================================
-    if (WiFi.status() == WL_CONNECTED) {
-      HTTPClient http;
-      
-      // Load actual AWS certs into BearSSL secure client
-      wifiSecureClient.setBufferSizes(2048, 1024); // Handshake memory optimization for ESP8266
-      wifiSecureClient.setTrustAnchors(&caCert);
-      wifiSecureClient.setClientRSACert(&clientCert, &clientKey);
-      
-      // Target the AWS IoT Core HTTPS REST publish endpoint
-      String awsUrl = "https://" + String(aws_endpoint) + ":8443/topics/" + String(aws_topic) + "?qos=1";
-      
-      http.begin(wifiSecureClient, awsUrl);
-      http.addHeader("Content-Type", "application/json");
-
-      String awsPayload = "{";
-      awsPayload += "\"device_id\":\"REMAC_PET_001\",";
-      awsPayload += "\"temperature\":" + String(temperature, 1) + ",";
-      awsPayload += "\"humidity\":" + String(humidity, 1) + ",";
-      awsPayload += "\"proximity\":" + String(distance, 1) + ",";
-      awsPayload += "\"material_level\":" + String(level, 1) + ",";
-      awsPayload += "\"status\":\"" + statusStr + "\",";
-      awsPayload += "\"active_alerts\":\"" + alertStr + "\"";
-      awsPayload += "}";
-
-      Serial.print("Publishing to AWS IoT Core... ");
-      int awsResponseCode = http.POST(awsPayload);
-      if (awsResponseCode > 0) {
-        Serial.println(awsResponseCode); // Should be 200/202 on success!
-      } else {
-        Serial.print("Failed: ");
-        Serial.println(http.errorToString(awsResponseCode).c_str());
-      }
-      http.end();
-    } else {
-      Serial.println("AWS upload skipped (offline).");
-    }
+  // LED logic
+  if (hasCurrentAlert) {
+    digitalWrite(GREEN_LED, LOW);
+    digitalWrite(BLUE_LED, HIGH); // Alarm LED
+  } else {
+    digitalWrite(GREEN_LED, HIGH); // Safe LED
+    digitalWrite(BLUE_LED, LOW);
   }
 
-  // Cycle LCD pages
-  if (currentMillis - lastLCDCycleTime >= LCD_CYCLE_INTERVAL) {
-    lastLCDCycleTime = currentMillis;
-    lcdPage = (lcdPage + 1) % 3;
-    updateLCD(lcdPage);
+  String statusStr = hasCurrentAlert ? "DANGER" : "SAFE";
+  String alertStr = "None";
+  if (isTempAlert && isHumAlert && isLevelAlert) alertStr = "High Temp + High Humid + Low Material";
+  else if (isTempAlert && isHumAlert) alertStr = "High Temperature + High Humidity";
+  else if (isTempAlert && isLevelAlert) alertStr = "High Temperature + Low Material";
+  else if (isHumAlert && isLevelAlert) alertStr = "High Humidity + Low Material";
+  else if (isTempAlert) alertStr = "High Temperature";
+  else if (isHumAlert) alertStr = "High Humidity";
+  else if (isLevelAlert) alertStr = "Low Material Level";
+
+  // Cache values globally
+  currentTemp = temperature;
+  currentHum = humidity;
+  currentLevel = level;
+
+  // 2. Display on LCD and Serial Monitor
+  updateLCD();
+  
+  Serial.println("==========================================");
+  Serial.print("Temperature : "); Serial.print(temperature); Serial.println(" C");
+  Serial.print("Humidity    : "); Serial.print(humidity); Serial.println(" %");
+  Serial.print("Level       : "); Serial.print(level); Serial.println(" %");
+  Serial.print("Alerts      : "); Serial.println(alertStr);
+
+  // ==========================================
+  // A. UPLOAD TO LOCAL DASHBOARD (HTTP port 3000)
+  // ==========================================
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    String uploadUrl = "http://" + local_server_ip + ":" + String(local_server_port) + "/api/telemetry/" + String(UNIT_ID);
+    
+    http.begin(localClient, uploadUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    String jsonPayload = "{";
+    jsonPayload += "\"device\":\"REMAC_PET_001\",";
+    jsonPayload += "\"timestamp\":\"" + String(millis() / 1000) + "s\",";
+    jsonPayload += "\"temperature\":" + String(temperature, 1) + ",";
+    jsonPayload += "\"humidity\":" + String(humidity, 1) + ",";
+    jsonPayload += "\"distance\":" + String(distance, 1) + ",";
+    jsonPayload += "\"material_level\":" + String(level, 1) + ",";
+    jsonPayload += "\"status\":\"" + statusStr + "\",";
+    jsonPayload += "\"active_alert\":\"" + alertStr + "\",";
+    jsonPayload += "\"random_forest\":\"" + statusStr + "\",";
+    jsonPayload += "\"isolation_forest\":\"" + String(hasCurrentAlert ? "ANOMALY" : "NORMAL") + "\",";
+    jsonPayload += "\"temperature_risk\":" + String((temperature / 40.0) * 100, 1) + ",";
+    jsonPayload += "\"humidity_risk\":" + String((humidity / 60.0) * 100, 1);
+    jsonPayload += "}";
+
+    Serial.print("Uploading to Dashboard... ");
+    int httpResponseCode = http.PUT(jsonPayload); 
+    Serial.println(httpResponseCode); // Prints 200 on success!
+    http.end();
+  } else {
+    Serial.println("Local upload skipped (WiFi disconnected).");
   }
+
+  // ==========================================
+  // B. UPLOAD TO AWS IOT CORE (HTTPS POST port 8443)
+  // ==========================================
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    
+    // Configure BearSSL securely using native methods
+    wifiSecureClient.setBufferSizes(2048, 1024); // Optimize handshakes for ESP8266 RAM
+    wifiSecureClient.setTrustAnchors(&caCert);
+    wifiSecureClient.setClientRSACert(&clientCert, &clientKey);
+    
+    // AWS IoT Core HTTPS REST publish endpoint
+    String awsUrl = "https://" + String(aws_endpoint) + ":8443/topics/" + String(aws_topic) + "?qos=1";
+    
+    http.begin(wifiSecureClient, awsUrl);
+    http.addHeader("Content-Type", "application/json");
+
+    String awsPayload = "{";
+    awsPayload += "\"device_id\":\"REMAC_PET_001\",";
+    awsPayload += "\"temperature\":" + String(temperature, 1) + ",";
+    awsPayload += "\"humidity\":" + String(humidity, 1) + ",";
+    awsPayload += "\"proximity\":" + String(distance, 1) + ",";
+    awsPayload += "\"material_level\":" + String(level, 1) + ",";
+    awsPayload += "\"status\":\"" + statusStr + "\",";
+    awsPayload += "\"active_alerts\":\"" + alertStr + "\"";
+    awsPayload += "}";
+
+    Serial.print("Publishing to AWS IoT Core... ");
+    int awsResponseCode = http.POST(awsPayload);
+    if (awsResponseCode > 0) {
+      Serial.println(awsResponseCode); // Prints 200/202 on success!
+    } else {
+      Serial.print("Failed: ");
+      Serial.println(http.errorToString(awsResponseCode).c_str());
+    }
+    http.end();
+  } else {
+    Serial.println("AWS upload skipped (offline).");
+  }
+
+  // Delay exactly 5 seconds before the next iteration
+  delay(5000);
 }
