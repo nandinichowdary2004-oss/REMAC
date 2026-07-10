@@ -1,0 +1,9 @@
+# Ignore node_modules everywhere
+node_modules/
+frontend/node_modules/
+
+# Local files
+.env
+.env.local
+*.log
+.DS_Store
