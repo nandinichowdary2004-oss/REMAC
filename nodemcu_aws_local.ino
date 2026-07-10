@@ -122,6 +122,11 @@ WiFiClientSecure wifiSecureClient; // Handles SSL logic for AWS IoT Core
 WiFiClient localClient;             // Handles local unencrypted HTTP requests
 time_t nowTime;
 
+// BearSSL Certificate Objects for AWS IoT Core
+BearSSL::X509List caCert(AWS_CERT_CA);
+BearSSL::X509List clientCert(AWS_CERT_CRT);
+BearSSL::PrivateKey clientKey(AWS_CERT_PRIVATE);
+
 // Thresholds & Status variables
 String material = "PLA";
 const float TEMP_LIMIT = 30.0;
@@ -414,9 +419,8 @@ void loop() {
       
       // Load actual AWS certs into BearSSL secure client
       wifiSecureClient.setBufferSizes(2048, 1024); // Handshake memory optimization for ESP8266
-      wifiSecureClient.setCACert(AWS_CERT_CA);
-      wifiSecureClient.setCertificate(AWS_CERT_CRT);
-      wifiSecureClient.setPrivateKey(AWS_CERT_PRIVATE);
+      wifiSecureClient.setTrustAnchors(&caCert);
+      wifiSecureClient.setClientRSACert(&clientCert, &clientKey);
       
       // Target the AWS IoT Core HTTPS REST publish endpoint
       String awsUrl = "https://" + String(aws_endpoint) + ":8443/topics/" + String(aws_topic) + "?qos=1";
