@@ -16,10 +16,8 @@ const char* password = "12345678";
 const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
-// Local PC server configurations
-const String local_server_ip = "YOUR_PC_IP"; // <-- CHANGE THIS to your PC's Wi-Fi IP address!
-const int local_server_port = 3000;
-const String local_server_url = "http://" + local_server_ip + ":" + String(local_server_port) + "/api/telemetry/1";
+// Static Cloud JSONBlob configuration (Does NOT require any PC server or signup!)
+const String cloud_jsonblob_url = "https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
@@ -334,13 +332,13 @@ void loop() {
   Serial.print("Alerts      : "); Serial.println(alertStr);
 
   // ==========================================
-  // A. UPLOAD TO LOCAL TELEMETRY RECEIVER (HTTP port 3000)
+  // A. UPLOAD TO CLOUD TELEMETRY STORAGE (JSONBlob - Direct Internet Upload)
   // ==========================================
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     
-    // We send to your local PC server directly!
-    http.begin(localClient, local_server_url);
+    // We send to the secure cloud endpoint directly! No local server needed on PC!
+    http.begin(wifiClientInsecure, cloud_jsonblob_url);
     http.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
