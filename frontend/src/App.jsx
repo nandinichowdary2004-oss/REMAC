@@ -196,39 +196,39 @@ export default function App() {
         };
       };
 
-      for (const unit of STORAGE_UNITS) {
-        let livePayload = null;
-        let historyPayload = null;
-        
-        // 1. Fetch latest reading from local REMAC Express server API
-        try {
-          const res = await fetch(`/api/telemetry/${unit.id}`);
-          if (res.ok) {
-            livePayload = await res.json();
-            setIsSimulatorActive(true);
-            setDiagStatus(prev => ({ ...prev, local: 'Connected' }));
-          } else {
-            throw new Error("Local API returned error status");
-          }
-        } catch (e) {
-          setDiagStatus(prev => ({ ...prev, local: 'Offline' }));
-          // Fallback to JSONBlob cloud storage directly in browser (only for Unit 1 physical hardware!)
-          if (unit.id === 1) {
-            try {
-              const res = await fetch(`https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86`);
-              if (res.ok) {
-                livePayload = await res.json();
-                setIsSimulatorActive(true);
-                setDiagStatus(prev => ({ ...prev, cloud: 'Connected', error: '' }));
-              } else {
-                throw new Error(`HTTP ${res.status}`);
-              }
-            } catch (cloudErr) {
-              console.warn("Cloud JSONBlob fetch failed:", cloudErr);
-              setDiagStatus(prev => ({ ...prev, cloud: 'Failed', error: cloudErr.message }));
-            }
-          }
+      let sharedLivePayload = null;
+
+      // Fetch live telemetry (always fetch from Unit 1 as the master sensor node)
+      try {
+        const res = await fetch(`/api/telemetry/1`);
+        if (res.ok) {
+          sharedLivePayload = await res.json();
+          setIsSimulatorActive(true);
+          setDiagStatus(prev => ({ ...prev, local: 'Connected' }));
+        } else {
+          throw new Error("Local API returned error status");
         }
+      } catch (e) {
+        setDiagStatus(prev => ({ ...prev, local: 'Offline' }));
+        // Fallback to JSONBlob cloud database directly in the browser
+        try {
+          const res = await fetch(`https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86`);
+          if (res.ok) {
+            sharedLivePayload = await res.json();
+            setIsSimulatorActive(true);
+            setDiagStatus(prev => ({ ...prev, cloud: 'Connected', error: '' }));
+          } else {
+            throw new Error(`HTTP ${res.status}`);
+          }
+        } catch (cloudErr) {
+          console.warn("Cloud JSONBlob fetch failed:", cloudErr);
+          setDiagStatus(prev => ({ ...prev, cloud: 'Failed', error: cloudErr.message }));
+        }
+      }
+
+      for (const unit of STORAGE_UNITS) {
+        let livePayload = sharedLivePayload;
+        let historyPayload = null;
 
         // Only fall back to dummy mock data if simulation is enabled
         if (!livePayload) {
@@ -237,6 +237,12 @@ export default function App() {
           } else {
             livePayload = null;
           }
+        } else {
+          // Override the device ID field to represent the specific storage unit
+          livePayload = {
+            ...livePayload,
+            device: unit.device_id
+          };
         }
 
         if (livePayload) {
