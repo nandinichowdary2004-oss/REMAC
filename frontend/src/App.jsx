@@ -1075,8 +1075,28 @@ function TrendCharts({ history, tempThreshold, humidThreshold }) {
             const x = getX(idx);
             const y = getY(val);
             const color = getColorForVal(val);
+            const timeStr = history[idx] ? history[idx].Timestamp : "";
             return (
-              <circle key={idx} cx={x} cy={y} r="4.5" fill={color} stroke="#121226" strokeWidth="1.5" style={{ transition: 'all 0.5s ease-in-out' }} />
+              <circle 
+                key={idx} 
+                cx={x} 
+                cy={y} 
+                r="4.5" 
+                fill={color} 
+                stroke="#121226" 
+                strokeWidth="1.5" 
+                style={{ transition: 'all 0.2s ease-in-out', cursor: 'pointer' }}
+                onMouseEnter={(e) => {
+                  e.target.setAttribute('r', '7.5');
+                  e.target.setAttribute('stroke-width', '2.5');
+                }}
+                onMouseLeave={(e) => {
+                  e.target.setAttribute('r', '4.5');
+                  e.target.setAttribute('stroke-width', '1.5');
+                }}
+              >
+                <title>{`Time: ${timeStr}\nValue: ${val.toFixed(1)}${chartUnit}`}</title>
+              </circle>
             );
           })}
         </svg>

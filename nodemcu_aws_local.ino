@@ -325,7 +325,19 @@ void loop() {
   // 2. Display on LCD and Serial Monitor
   updateLCD();
   
+  time_t now = time(nullptr);
+  String timestampStr;
+  if (now > 8 * 3600 * 2) {
+    struct tm* timeinfo = localtime(&now);
+    char timeBuffer[20];
+    strftime(timeBuffer, sizeof(timeBuffer), "%H:%M:%S", timeinfo);
+    timestampStr = String(timeBuffer);
+  } else {
+    timestampStr = String(millis() / 1000) + "s";
+  }
+
   Serial.println("==========================================");
+  Serial.print("Timestamp   : "); Serial.println(timestampStr);
   Serial.print("Temperature : "); Serial.print(temperature); Serial.println(" C");
   Serial.print("Humidity    : "); Serial.print(humidity); Serial.println(" %");
   Serial.print("Level       : "); Serial.print(level); Serial.println(" %");
@@ -343,7 +355,7 @@ void loop() {
 
     String jsonPayload = "{";
     jsonPayload += "\"device\":\"REMAC_PET_001\",";
-    jsonPayload += "\"timestamp\":\"" + String(millis() / 1000) + "s\",";
+    jsonPayload += "\"timestamp\":\"" + timestampStr + "\",";
     jsonPayload += "\"temperature\":" + String(temperature, 1) + ",";
     jsonPayload += "\"humidity\":" + String(humidity, 1) + ",";
     jsonPayload += "\"distance\":" + String(distance, 1) + ",";
