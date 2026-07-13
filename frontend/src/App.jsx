@@ -1048,9 +1048,22 @@ function TrendCharts({ history, tempThreshold, humidThreshold }) {
           })}
 
           {/* Time axis stamps */}
-          <text x={padLeft} y={height - 10} fill="var(--text-secondary)" fontSize="11" textAnchor="start">{formatTime(history[0].Timestamp)}</text>
-          <text x={padLeft + chartW / 2} y={height - 10} fill="var(--text-secondary)" fontSize="11" textAnchor="middle">{formatTime(history[Math.floor(n/2)].Timestamp)}</text>
-          <text x={width - padRight} y={height - 10} fill="var(--text-secondary)" fontSize="11" textAnchor="end">{formatTime(history[n-1].Timestamp)}</text>
+          {history.map((h, idx) => {
+            const x = getX(idx);
+            return (
+              <text 
+                key={idx} 
+                x={x} 
+                y={height - 10} 
+                fill="var(--text-secondary)" 
+                fontSize="9.5" 
+                textAnchor="middle"
+                style={{ transition: 'all 0.5s ease-in-out' }}
+              >
+                {formatTime(h.Timestamp)}
+              </text>
+            );
+          })}
 
           {/* Core axis lines */}
           <line x1={padLeft} y1={padTop} x2={padLeft} y2={height - padBottom} stroke="#3a3a5c" strokeWidth="1.5" />
