@@ -16,10 +16,9 @@ const char* password = "12345678";
 const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
-// Free Cloud KVDB.io configuration (Does NOT require any PC server or signup!)
-// Hugging Face cloud server URL (exposes your private telemetry endpoints)
-const String hf_username = "YOUR_HF_USERNAME"; // <-- CHANGE THIS to your Hugging Face username!
-const String cloud_server_url = "https://" + hf_username + "-remac.hf.space/api/telemetry/1";
+// Vercel cloud server URL (exposes your private telemetry endpoints)
+const String vercel_project_name = "YOUR_VERCEL_PROJECT"; // <-- CHANGE THIS to your Vercel project name!
+const String cloud_server_url = "https://" + vercel_project_name + ".vercel.app/api/telemetry/1";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
