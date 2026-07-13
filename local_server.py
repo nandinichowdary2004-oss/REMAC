@@ -2,7 +2,7 @@ import os
 import json
 from http.server import SimpleHTTPRequestHandler, HTTPServer
 
-PORT = int(os.environ.get('PORT', 7860))
+PORT = int(os.environ.get('PORT', 3000))
 LIVE_DATA_DIR = os.path.join(os.getcwd(), 'live_data')
 
 # Ensure live_data directory exists

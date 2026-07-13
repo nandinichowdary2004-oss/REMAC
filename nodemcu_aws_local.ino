@@ -16,9 +16,10 @@ const char* password = "12345678";
 const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
-// Vercel cloud server URL (exposes your private telemetry endpoints)
-const String vercel_project_name = "YOUR_VERCEL_PROJECT"; // <-- CHANGE THIS to your Vercel project name!
-const String cloud_server_url = "https://" + vercel_project_name + ".vercel.app/api/telemetry/1";
+// Local PC server configurations
+const String local_server_ip = "YOUR_PC_IP"; // <-- CHANGE THIS to your PC's Wi-Fi IP address!
+const int local_server_port = 3000;
+const String local_server_url = "http://" + local_server_ip + ":" + String(local_server_port) + "/api/telemetry/1";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
@@ -118,7 +119,8 @@ DHT11 dht11(DHTPIN);
 
 // WiFi Clients
 WiFiClientSecure wifiSecureClient;   // Handles secure SSL handshake for AWS IoT Core
-WiFiClientSecure wifiClientInsecure; // Handles SSL logic for KVDB.io cloud storage
+WiFiClientSecure wifiClientInsecure; // Handles SSL logic for cloud backups if needed
+WiFiClient localClient;             // Handles unencrypted local HTTP requests to your PC server
 time_t nowTime;
 
 // BearSSL Certificate Wrapper Objects for AWS
@@ -332,13 +334,13 @@ void loop() {
   Serial.print("Alerts      : "); Serial.println(alertStr);
 
   // ==========================================
-  // A. UPLOAD TO CLOUD TELEMETRY STORAGE (JSONBlob - Direct Internet Upload)
+  // A. UPLOAD TO LOCAL TELEMETRY RECEIVER (HTTP port 3000)
   // ==========================================
   if (WiFi.status() == WL_CONNECTED) {
     HTTPClient http;
     
-    // We send to the secure cloud endpoint directly! No local server needed on PC!
-    http.begin(wifiClientInsecure, cloud_server_url);
+    // We send to your local PC server directly!
+    http.begin(localClient, local_server_url);
     http.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
@@ -357,7 +359,7 @@ void loop() {
     jsonPayload += "}";
 
     Serial.print("Uploading to Dashboard... ");
-    int httpResponseCode = http.PUT(jsonPayload); // PUT updates our static JSONBlob
+    int httpResponseCode = http.PUT(jsonPayload); // PUT updates our telemetry endpoint on the local PC server
     Serial.println(httpResponseCode); // Prints 200 on success!
     http.end();
   } else {
