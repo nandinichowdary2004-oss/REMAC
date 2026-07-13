@@ -17,7 +17,9 @@ const char* aws_endpoint = "a1kneu9xpfe402-ats.iot.eu-north-1.amazonaws.com";
 const char* aws_topic = "remac/node1/data";
 
 // Free Cloud KVDB.io configuration (Does NOT require any PC server or signup!)
-const String cloud_jsonblob_url = "https://jsonblob.com/api/jsonBlob/019f4ab1-f7e9-7797-aad7-e56a4a77fc86";
+// Hugging Face cloud server URL (exposes your private telemetry endpoints)
+const String hf_username = "YOUR_HF_USERNAME"; // <-- CHANGE THIS to your Hugging Face username!
+const String cloud_server_url = "https://" + hf_username + "-remac.hf.space/api/telemetry/1";
 
 // ==========================================
 // 2. AWS SECURITY CERTIFICATES (PEM format)
@@ -337,7 +339,7 @@ void loop() {
     HTTPClient http;
     
     // We send to the secure cloud endpoint directly! No local server needed on PC!
-    http.begin(wifiClientInsecure, cloud_jsonblob_url);
+    http.begin(wifiClientInsecure, cloud_server_url);
     http.addHeader("Content-Type", "application/json");
 
     String jsonPayload = "{";
