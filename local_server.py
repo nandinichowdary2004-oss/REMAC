@@ -46,9 +46,9 @@ class LocalTelemetryHandler(SimpleHTTPRequestHandler):
         super().do_GET()
 
     def translate_path(self, path):
-        # Serve static files from the frontend/dist folder
+        # Serve static files from the docs folder at the root
         clean_path = path.split('?')[0].split('#')[0]
-        dist_dir = os.path.join(os.getcwd(), 'frontend', 'dist')
+        dist_dir = os.path.join(os.getcwd(), 'docs')
         target_path = os.path.join(dist_dir, clean_path.lstrip('/'))
         
         # For base route or missing files (SPA routing), fallback to index.html
