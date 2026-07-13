@@ -84,52 +84,19 @@ for index, row in df.iterrows():
     ws.append(list(data.values()))
     wb.save(excel_file)
 
-    # 2. Convert to JSON & Update latest.json for Dashboard
-    dashboard_payload = {
-        "device": data.get("Device_ID"),
-        "timestamp": str(data.get("Timestamp")),
-        "temperature": float(data.get("Temperature_C", 0.0)),
-        "humidity": float(data.get("Humidity_%", 0.0)),
-        "distance": float(data.get("Distance_cm", 0.0)),
-        "material_level": float(data.get("Material_Level_%", 0.0)),
-        "status": data.get("Status", "SAFE"),
-        "active_alert": data.get("Active_Alerts"),
-        "random_forest": data.get("Status", "SAFE"),
-        "isolation_forest": "NORMAL" if data.get("Status") == "SAFE" else "ANOMALY",
-        "temperature_risk": round((float(data.get("Temperature_C", 0.0)) / 40.0) * 100, 2),
-        "humidity_risk": round((float(data.get("Humidity_%", 0.0)) / 60.0) * 100, 2)
-    }
-
-    live_data_dir = Path("live_data")
-    live_data_dir.mkdir(exist_ok=True)
-    for filename in ["latest.json", "latest_1.json"]:
-        for attempt in range(5):
-            try:
-                with open(live_data_dir / filename, "w") as file:
-                    json.dump(dashboard_payload, file, indent=4)
-                break
-            except PermissionError:
-                time.sleep(0.1)
-
-    # Sync to Cloud KV store for Render hosting compatibility
-    for endpoint_suffix in ["latest", "latest_1"]:
-        try:
-            requests.post(f"https://kvdb.io/4fm9CKFheYEj7fqeaijvJz/{endpoint_suffix}", json=dashboard_payload, timeout=2)
-        except Exception:
-            pass
-
+    # Convert row data to JSON payload
     payload = json.dumps(data)
 
-    # 3. Publish to AWS
+    # 2. Publish raw sensor data to AWS IoT Core
     mqtt_connection.publish(
         topic=TOPIC,
         payload=payload,
         qos=mqtt.QoS.AT_LEAST_ONCE
     )
 
-    print(f"Published Row {index + 1}")
+    print(f"Published Row {index + 1} to AWS IoT Core")
 
-    # 4. Wait 5 seconds
+    # 3. Wait 5 seconds
     time.sleep(5)
 
 
